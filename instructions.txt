@@ -1,0 +1,7 @@
+As you can see, I've already created a basic nextjs application. In the “app/page.tsx” file, I want you to create the following elements for me:
+
+
+- it's a world map where you can select a country, see the global map, navigate on the map, in a fluid and modern way. 
+- The user will have a search field where he can type in a country, the map of this country will appear and the user will be able to navigate the map.
+- The user can select a country and indicate that you've visited it. you can add the color, and  add information such as whether he has just been there, whether he has traveled there, whether he lived there. with the addition of one or more dates and noted information. 
+- The style on the map can be selected, the default is simple with black lines and white background
