@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
+import { useState, useEffect, useRef } from "react";
+import { MapContainer, TileLayer, GeoJSON, useMap, Popup } from "react-leaflet";
 import {
   Box,
   Autocomplete,
@@ -22,6 +22,7 @@ import {
 import { ChromePicker } from "react-color";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
+import L from "leaflet";
 
 interface TravelData {
   country: string;
@@ -42,6 +43,81 @@ interface TravelData {
   }[];
 }
 
+interface GeoJSONFeature {
+  type: string;
+  properties: {
+    name: string;
+    name_local?: string; // Optional local name
+  };
+  geometry: {
+    type: string;
+    coordinates: any[];
+  };
+}
+
+// Component to handle map focus changes
+function FocusOnCountry({
+  country,
+  geoJsonData,
+  onMapMove,
+}: {
+  country: string | null;
+  geoJsonData: { features: GeoJSONFeature[] } | null;
+  onMapMove: () => void;
+}) {
+  const map = useMap();
+
+  // Add map move handler
+  useEffect(() => {
+    map.on("movestart", onMapMove);
+    return () => {
+      map.off("movestart", onMapMove);
+    };
+  }, [map, onMapMove]);
+
+  useEffect(() => {
+    if (country && geoJsonData) {
+      const countryFeature = geoJsonData.features.find(
+        (f) => f.properties.name === country
+      );
+
+      if (countryFeature) {
+        try {
+          // Handle different geometry types
+          const allCoords: number[][] = [];
+
+          const extractCoords = (coords: any[]) => {
+            if (
+              coords.length === 2 &&
+              typeof coords[0] === "number" &&
+              typeof coords[1] === "number"
+            ) {
+              allCoords.push(coords);
+            } else {
+              coords.forEach((c) => extractCoords(c));
+            }
+          };
+
+          extractCoords(countryFeature.geometry.coordinates);
+
+          const latLngs = allCoords.map((coord) =>
+            L.latLng(coord[1], coord[0])
+          );
+
+          if (latLngs.length > 0) {
+            const bounds = L.latLngBounds(latLngs);
+            map.flyToBounds(bounds, { padding: [50, 50], duration: 1 });
+          }
+        } catch (error) {
+          console.error("Error focusing on country:", error);
+        }
+      }
+    }
+  }, [country, geoJsonData, map]);
+
+  return null;
+}
+
 const MAP_STYLES = {
   default: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   satellite:
@@ -50,7 +126,9 @@ const MAP_STYLES = {
 };
 
 export default function Home() {
-  const [geoJsonData, setGeoJsonData] = useState<any>(null);
+  const [geoJsonData, setGeoJsonData] = useState<{
+    features: GeoJSONFeature[];
+  } | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>("default");
@@ -71,6 +149,14 @@ export default function Home() {
     cities: [],
   });
 
+  // Load data from localStorage on initial render
+  useEffect(() => {
+    const savedData = localStorage.getItem("travelData");
+    if (savedData) {
+      setTravelData(JSON.parse(savedData));
+    }
+  }, []);
+
   useEffect(() => {
     fetch(
       "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"
@@ -79,17 +165,17 @@ export default function Home() {
       .then((data) => {
         setGeoJsonData(data);
         const countryNames = data.features
-          .map((f: any) => f.properties.name)
+          .map((f: GeoJSONFeature) => f.properties.name)
           .sort();
         setCountries(countryNames);
       })
       .catch((error) => console.error("Error loading map data:", error));
   }, []);
 
-  const getCountryStyle = (feature: any) => ({
+  const getCountryStyle = (feature: GeoJSONFeature) => ({
     fillColor: travelData[feature.properties.name]?.color || "#CCCCCC",
-    weight: 1,
-    color: "#333",
+    weight: feature.properties.name === selectedCountry ? 3 : 1,
+    color: feature.properties.name === selectedCountry ? "#000" : "#333",
     fillOpacity: travelData[feature.properties.name] ? 0.8 : 0.6,
   });
 
@@ -112,12 +198,26 @@ export default function Home() {
     setDialogOpen(true);
   };
 
+  const handleCountrySelect = (countryName: string | null) => {
+    if (countryName) {
+      setSelectedCountry(countryName);
+    }
+  };
+
+  const handleMapMove = () => {
+    // Don't clear selection when map moves
+    // setSelectedCountry(null);
+  };
+
   const handleSave = () => {
     if (selectedCountry) {
-      setTravelData((prev) => ({
-        ...prev,
+      const newTravelData = {
+        ...travelData,
         [selectedCountry]: currentData,
-      }));
+      };
+      setTravelData(newTravelData);
+      // Save to localStorage
+      localStorage.setItem("travelData", JSON.stringify(newTravelData));
     }
     setDialogOpen(false);
   };
@@ -159,7 +259,9 @@ export default function Home() {
           renderInput={(params) => (
             <TextField {...params} label="Search Country" />
           )}
-          onChange={(_, value) => value && handleCountryClick(value)}
+          onChange={(_, value) => handleCountrySelect(value)}
+          value={selectedCountry}
+          isOptionEqualToValue={(option, value) => option === value}
         />
         <FormControl sx={{ width: 200 }}>
           <InputLabel>Map Style</InputLabel>
@@ -186,15 +288,37 @@ export default function Home() {
         >
           <TileLayer url={MAP_STYLES[mapStyle]} />
           {geoJsonData && (
-            <GeoJSON
-              data={geoJsonData}
-              style={getCountryStyle}
-              onEachFeature={(feature, layer) => {
-                layer.on({
-                  click: () => handleCountryClick(feature.properties.name),
-                });
-              }}
-            />
+            <>
+              <FocusOnCountry
+                country={selectedCountry}
+                geoJsonData={geoJsonData}
+                onMapMove={handleMapMove}
+              />
+              <GeoJSON
+                data={geoJsonData}
+                style={getCountryStyle}
+                onEachFeature={(feature, layer) => {
+                  layer.on({
+                    click: () => handleCountryClick(feature.properties.name),
+                  });
+                  if (feature.properties.name === selectedCountry) {
+                    const center = layer.getBounds().getCenter();
+                    layer
+                      .bindPopup(
+                        `<div style="text-align: center">
+                        <strong>${feature.properties.name}</strong>
+                        ${
+                          feature.properties.name_local
+                            ? `<br/><em>${feature.properties.name_local}</em>`
+                            : ""
+                        }
+                      </div>`
+                      )
+                      .openPopup();
+                  }
+                }}
+              />
+            </>
           )}
         </MapContainer>
       </Paper>
