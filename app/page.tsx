@@ -1,456 +1,401 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
-import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
 import {
-  TextField,
   Box,
-  Paper,
+  Autocomplete,
+  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
+  Select,
+  MenuItem,
   FormControl,
   InputLabel,
-  MenuItem,
-  Select as MuiSelect,
-  TextField as MuiTextField,
-  Autocomplete,
-  CircularProgress,
+  Paper,
+  IconButton,
+  Typography,
 } from "@mui/material";
 import { ChromePicker } from "react-color";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
 
-// Dynamically import react-leaflet components with no SSR
-const MapContainer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const GeoJSON = dynamic(
-  () => import("react-leaflet").then((mod) => mod.GeoJSON),
-  { ssr: false }
-);
-
-type VisitType = "visited" | "lived" | "traveled";
-
-interface DateRange {
-  start: string;
-  end: string;
-}
-
-interface CityInfo {
-  name: string;
-  dateRanges: DateRange[];
-}
-
-interface VisitInfo {
-  type: VisitType;
+interface TravelData {
+  country: string;
   color: string;
-  cities: CityInfo[];
-  notes: string;
-  departments?: string[];
+  comment: string;
+  trips: {
+    startDate: string;
+    endDate: string;
+  }[];
+  cities: {
+    name: string;
+    color: string;
+    comment: string;
+    trips: {
+      startDate: string;
+      endDate: string;
+    }[];
+  }[];
 }
 
-interface CountryVisits {
-  [key: string]: VisitInfo;
-}
-
-interface GeoJsonFeature {
-  type: "Feature";
-  properties: {
-    ADMIN: string;
-    [key: string]: unknown;
-  };
-  geometry: {
-    type: "Polygon" | "MultiPolygon";
-    coordinates: number[][][];
-  };
-}
-
-interface GeoJsonData {
-  type: "FeatureCollection";
-  features: GeoJsonFeature[];
-}
-
-const defaultMapStyles = {
-  default: {
-    fillColor: "#D6D6DA",
-    fillOpacity: 0.7,
-    color: "#000",
-    weight: 1,
-  },
+const MAP_STYLES = {
+  default: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  satellite:
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  terrain: "https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg",
 };
 
 export default function Home() {
-  const [selectedCountry, setSelectedCountry] = useState<string>("");
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
-  const [visitDialogOpen, setVisitDialogOpen] = useState(false);
-  const [visits, setVisits] = useState<CountryVisits>({});
-  const [visitType, setVisitType] = useState<VisitType>("visited");
-  const [selectedColor, setSelectedColor] = useState("#4CAF50");
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [cities, setCities] = useState<CityInfo[]>([
-    { name: "", dateRanges: [{ start: "", end: "" }] },
-  ]);
-  const [mapStyle, setMapStyle] = useState("default");
+  const [geoJsonData, setGeoJsonData] = useState<any>(null);
   const [countries, setCountries] = useState<string[]>([]);
-  const [geoJsonData, setGeoJsonData] = useState<GeoJsonData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [mapKey, setMapKey] = useState(0);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([20, 0]);
-  const [mapZoom, setMapZoom] = useState(2);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>("default");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [travelData, setTravelData] = useState<{ [key: string]: TravelData }>(
+    {}
+  );
+  const [currentData, setCurrentData] = useState<TravelData>({
+    country: "",
+    color: "#1976d2",
+    comment: "",
+    trips: [
+      {
+        startDate: new Date().toISOString(),
+        endDate: new Date().toISOString(),
+      },
+    ],
+    cities: [],
+  });
 
   useEffect(() => {
-    console.log("Loading saved visits...");
-    const savedVisits = localStorage.getItem("countryVisits");
-    if (savedVisits) {
-      const parsed = JSON.parse(savedVisits);
-      console.log("Loaded visits:", parsed);
-      setVisits(parsed);
-    }
-
     fetch(
-      "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson"
+      "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"
     )
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch GeoJSON data: ${response.status} ${response.statusText}`
-          );
-        }
-        return response.json();
-      })
-      .then((data: GeoJsonData) => {
-        console.log("Loaded GeoJSON data:", data);
+      .then((response) => response.json())
+      .then((data) => {
         setGeoJsonData(data);
         const countryNames = data.features
-          .map((feature) => feature.properties.ADMIN)
-          .filter((name): name is string => Boolean(name))
-          .sort((a, b) => a.localeCompare(b));
-        console.log("Available countries:", countryNames);
+          .map((f: any) => f.properties.name)
+          .sort();
         setCountries(countryNames);
       })
-      .catch((error) => {
-        console.error("Error fetching GeoJSON data:", error);
-      });
+      .catch((error) => console.error("Error loading map data:", error));
   }, []);
 
-  const handleCountryClick = (feature: GeoJsonFeature) => {
-    console.log("Country clicked:", feature);
-    const countryName = feature.properties.ADMIN;
+  const getCountryStyle = (feature: any) => ({
+    fillColor: travelData[feature.properties.name]?.color || "#CCCCCC",
+    weight: 1,
+    color: "#333",
+    fillOpacity: travelData[feature.properties.name] ? 0.8 : 0.6,
+  });
+
+  const handleCountryClick = (countryName: string) => {
     setSelectedCountry(countryName);
-    setIsEditMode(!!visits[countryName]);
-
-    if (visits[countryName]) {
-      console.log("Loading existing visit data:", visits[countryName]);
-      const visitInfo = visits[countryName];
-      setVisitType(visitInfo.type);
-      setSelectedColor(visitInfo.color);
-      setCities(
-        visitInfo.cities.length > 0
-          ? visitInfo.cities
-          : [{ name: "", dateRanges: [{ start: "", end: "" }] }]
-      );
-      setSelectedDepartments(visitInfo.departments || []);
-      setNotes(visitInfo.notes);
-    } else {
-      resetForm();
-    }
-    setVisitDialogOpen(true);
-  };
-
-  const handleSaveVisit = async () => {
-    console.log("Saving visit...");
-    setLoading(true);
-    try {
-      if (selectedCountry) {
-        const filteredCities = cities.filter((city) => city.name.trim() !== "");
-        const updatedVisits = {
-          ...visits,
-          [selectedCountry]: {
-            type: visitType,
-            color: selectedColor,
-            cities: filteredCities,
-            departments: selectedDepartments,
-            notes,
+    setCurrentData(
+      travelData[countryName] || {
+        country: countryName,
+        color: "#1976d2",
+        comment: "",
+        trips: [
+          {
+            startDate: new Date().toISOString(),
+            endDate: new Date().toISOString(),
           },
-        };
-
-        console.log("Saving updated visits:", updatedVisits);
-        setVisits(updatedVisits);
-        localStorage.setItem("countryVisits", JSON.stringify(updatedVisits));
-        setMapKey((prev) => prev + 1);
+        ],
+        cities: [],
       }
-    } catch (error) {
-      console.error("Error saving visit:", error);
-    } finally {
-      setLoading(false);
-      setVisitDialogOpen(false);
-      setIsEditMode(false);
-      resetForm();
+    );
+    setDialogOpen(true);
+  };
+
+  const handleSave = () => {
+    if (selectedCountry) {
+      setTravelData((prev) => ({
+        ...prev,
+        [selectedCountry]: currentData,
+      }));
     }
+    setDialogOpen(false);
   };
 
-  const resetForm = () => {
-    setVisitType("visited");
-    setSelectedColor("#4CAF50");
-    setCities([{ name: "", dateRanges: [{ start: "", end: "" }] }]);
-    setSelectedDepartments([]);
-    setNotes("");
-  };
-
-  const getCountryStyle = (feature: GeoJsonFeature) => {
-    const countryName = feature.properties.ADMIN;
-    if (visits[countryName]) {
-      return {
-        ...defaultMapStyles.default,
-        fillColor: visits[countryName].color,
-        fillOpacity: 0.7,
-      };
-    }
-    return defaultMapStyles.default;
-  };
-
-  const handleCountrySearch = (
-    _event: React.SyntheticEvent,
-    newValue: string | null
-  ) => {
-    console.log("Country selected:", newValue);
-    if (newValue && geoJsonData) {
-      const country = geoJsonData.features.find(
-        (feature) => feature.properties.ADMIN === newValue
-      );
-      if (country) {
-        // Calculate the center of the country's coordinates
-        const coordinates = country.geometry.coordinates;
-        let allCoords: number[][] = [];
-
-        // Handle both Polygon and MultiPolygon
-        if (country.geometry.type === "Polygon") {
-          allCoords = coordinates[0];
-        } else if (country.geometry.type === "MultiPolygon") {
-          coordinates.forEach((polygon: number[][][]) => {
-            allCoords = allCoords.concat(polygon[0]);
-          });
-        }
-
-        const lats = allCoords.map((coord) => coord[1]);
-        const lngs = allCoords.map((coord) => coord[0]);
-
-        const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-        const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-
-        setMapCenter([centerLat, centerLng]);
-        setMapZoom(5);
-        setMapKey((prev) => prev + 1);
-
-        handleCountryClick(country);
-      }
-    }
-  };
-
-  const handleAddDateRange = (cityIndex: number) => {
-    const newCities = [...cities];
-    newCities[cityIndex].dateRanges.push({ start: "", end: "" });
-    setCities(newCities);
+  const addCity = () => {
+    setCurrentData((prev) => ({
+      ...prev,
+      cities: [
+        ...prev.cities,
+        {
+          name: "",
+          color: "#1976d2",
+          comment: "",
+          trips: [
+            {
+              startDate: new Date().toISOString(),
+              endDate: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    }));
   };
 
   return (
-    <Box className="p-4">
-      <Box className="mb-4 flex gap-4">
+    <Box
+      sx={{
+        height: "100vh",
+        p: 2,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+      }}
+    >
+      <Box sx={{ display: "flex", gap: 2 }}>
         <Autocomplete
           options={countries}
+          sx={{ width: 300 }}
           renderInput={(params) => (
-            <TextField {...params} label="Search Country" variant="outlined" />
+            <TextField {...params} label="Search Country" />
           )}
-          className="w-64"
-          onChange={handleCountrySearch}
-          isOptionEqualToValue={(option, value) => option === value}
-          getOptionLabel={(option) => option || ""}
-          renderOption={(props, option) => (
-            <Box component="li" {...props} key={option}>
-              {option}
-            </Box>
-          )}
+          onChange={(_, value) => value && handleCountryClick(value)}
         />
-        <FormControl className="w-48">
+        <FormControl sx={{ width: 200 }}>
           <InputLabel>Map Style</InputLabel>
-          <MuiSelect
+          <Select
             value={mapStyle}
             label="Map Style"
-            onChange={(e) => setMapStyle(e.target.value)}
+            onChange={(e) =>
+              setMapStyle(e.target.value as keyof typeof MAP_STYLES)
+            }
           >
             <MenuItem value="default">Default</MenuItem>
             <MenuItem value="satellite">Satellite</MenuItem>
             <MenuItem value="terrain">Terrain</MenuItem>
-          </MuiSelect>
+          </Select>
         </FormControl>
       </Box>
 
-      <Paper elevation={3} className="p-4">
-        <div style={{ height: "500px" }}>
-          <MapContainer
-            key={mapKey}
-            center={mapCenter}
-            zoom={mapZoom}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <TileLayer
-              url={
-                mapStyle === "satellite"
-                  ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                  : mapStyle === "terrain"
-                  ? "https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg"
-                  : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              }
+      <Paper elevation={3} sx={{ flexGrow: 1 }}>
+        <MapContainer
+          center={[20, 0]}
+          zoom={2}
+          style={{ height: "100%", width: "100%" }}
+          scrollWheelZoom={true}
+        >
+          <TileLayer url={MAP_STYLES[mapStyle]} />
+          {geoJsonData && (
+            <GeoJSON
+              data={geoJsonData}
+              style={getCountryStyle}
+              onEachFeature={(feature, layer) => {
+                layer.on({
+                  click: () => handleCountryClick(feature.properties.name),
+                });
+              }}
             />
-            {geoJsonData && (
-              <GeoJSON
-                data={geoJsonData}
-                style={getCountryStyle}
-                onEachFeature={(feature, layer) => {
-                  layer.on({
-                    click: () => handleCountryClick(feature),
-                  });
-                }}
-              />
-            )}
-          </MapContainer>
-        </div>
+          )}
+        </MapContainer>
       </Paper>
 
       <Dialog
-        open={visitDialogOpen}
-        onClose={() => setVisitDialogOpen(false)}
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
-          {isEditMode ? `Edit ${selectedCountry}` : `Add ${selectedCountry}`}
-        </DialogTitle>
+        <DialogTitle>{selectedCountry}</DialogTitle>
         <DialogContent>
-          <FormControl fullWidth className="mt-4">
-            <InputLabel>Visit Type</InputLabel>
-            <MuiSelect
-              value={visitType}
-              label="Visit Type"
-              onChange={(e) => setVisitType(e.target.value as VisitType)}
-            >
-              <MenuItem value="visited">Visited</MenuItem>
-              <MenuItem value="lived">Lived</MenuItem>
-              <MenuItem value="traveled">Traveled</MenuItem>
-            </MuiSelect>
-          </FormControl>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
+            <ChromePicker
+              color={currentData.color}
+              onChange={(color) =>
+                setCurrentData((prev) => ({ ...prev, color: color.hex }))
+              }
+            />
 
-          <Box className="mt-4">
-            <Button
-              variant="outlined"
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              style={{ backgroundColor: selectedColor }}
-            >
-              Choose Color
-            </Button>
-            {showColorPicker && (
-              <Box className="mt-2">
-                <ChromePicker
-                  color={selectedColor}
-                  onChange={(color) => setSelectedColor(color.hex)}
-                />
-              </Box>
-            )}
-          </Box>
+            <TextField
+              label="Country Comment"
+              multiline
+              rows={4}
+              value={currentData.comment}
+              onChange={(e) =>
+                setCurrentData((prev) => ({
+                  ...prev,
+                  comment: e.target.value,
+                }))
+              }
+            />
 
-          {cities.map((city, cityIndex) => (
-            <Box key={cityIndex} className="mt-4 p-4 border rounded">
-              <MuiTextField
-                label={`City ${cityIndex + 1}`}
-                value={city.name}
-                onChange={(e) => {
-                  const newCities = [...cities];
-                  newCities[cityIndex].name = e.target.value;
-                  if (
-                    cityIndex === cities.length - 1 &&
-                    e.target.value !== ""
-                  ) {
-                    newCities.push({
-                      name: "",
-                      dateRanges: [{ start: "", end: "" }],
-                    });
-                  }
-                  setCities(newCities);
-                }}
-                fullWidth
-              />
-
-              {city.dateRanges.map((dateRange, rangeIndex) => (
-                <Box key={rangeIndex} className="mt-2 flex gap-2">
-                  <MuiTextField
-                    label="Start Date"
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => {
-                      const newCities = [...cities];
-                      newCities[cityIndex].dateRanges[rangeIndex].start =
-                        e.target.value;
-                      setCities(newCities);
-                    }}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                  <MuiTextField
-                    label="End Date"
-                    type="date"
-                    value={dateRange.end}
-                    onChange={(e) => {
-                      const newCities = [...cities];
-                      newCities[cityIndex].dateRanges[rangeIndex].end =
-                        e.target.value;
-                      setCities(newCities);
-                    }}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Box>
-              ))}
-
-              <Button
-                onClick={() => handleAddDateRange(cityIndex)}
-                className="mt-2"
+            <Typography variant="h6">Trips</Typography>
+            {currentData.trips.map((trip, index) => (
+              <Box
+                key={index}
+                sx={{ display: "flex", gap: 2, alignItems: "center" }}
               >
-                Add Date Range
-              </Button>
-            </Box>
-          ))}
+                <TextField
+                  label="Start Date"
+                  type="date"
+                  value={trip.startDate.split("T")[0]}
+                  onChange={(e) => {
+                    const newTrips = [...currentData.trips];
+                    newTrips[index].startDate = new Date(
+                      e.target.value
+                    ).toISOString();
+                    setCurrentData((prev) => ({
+                      ...prev,
+                      trips: newTrips,
+                    }));
+                  }}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                />
+                <TextField
+                  label="End Date"
+                  type="date"
+                  value={trip.endDate.split("T")[0]}
+                  onChange={(e) => {
+                    const newTrips = [...currentData.trips];
+                    newTrips[index].endDate = new Date(
+                      e.target.value
+                    ).toISOString();
+                    setCurrentData((prev) => ({
+                      ...prev,
+                      trips: newTrips,
+                    }));
+                  }}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                />
+                <IconButton
+                  onClick={() => {
+                    const newTrips = currentData.trips.filter(
+                      (_, i) => i !== index
+                    );
+                    setCurrentData((prev) => ({ ...prev, trips: newTrips }));
+                  }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ))}
+            <Button
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setCurrentData((prev) => ({
+                  ...prev,
+                  trips: [
+                    ...prev.trips,
+                    {
+                      startDate: new Date().toISOString(),
+                      endDate: new Date().toISOString(),
+                    },
+                  ],
+                }));
+              }}
+            >
+              Add Trip
+            </Button>
 
-          <MuiTextField
-            label="Notes"
-            multiline
-            rows={4}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            fullWidth
-            className="mt-4"
-          />
+            <Typography variant="h6">Cities</Typography>
+            {currentData.cities.map((city, cityIndex) => (
+              <Box
+                key={cityIndex}
+                sx={{ border: "1px solid #ddd", p: 2, borderRadius: 1 }}
+              >
+                <TextField
+                  label="City Name"
+                  value={city.name}
+                  onChange={(e) => {
+                    const newCities = [...currentData.cities];
+                    newCities[cityIndex].name = e.target.value;
+                    setCurrentData((prev) => ({
+                      ...prev,
+                      cities: newCities,
+                    }));
+                  }}
+                />
+                <ChromePicker
+                  color={city.color}
+                  onChange={(color) => {
+                    const newCities = [...currentData.cities];
+                    newCities[cityIndex].color = color.hex;
+                    setCurrentData((prev) => ({
+                      ...prev,
+                      cities: newCities,
+                    }));
+                  }}
+                />
+                <TextField
+                  label="City Comment"
+                  multiline
+                  rows={2}
+                  value={city.comment}
+                  onChange={(e) => {
+                    const newCities = [...currentData.cities];
+                    newCities[cityIndex].comment = e.target.value;
+                    setCurrentData((prev) => ({
+                      ...prev,
+                      cities: newCities,
+                    }));
+                  }}
+                />
+                {/* City trips */}
+                {city.trips.map((trip, tripIndex) => (
+                  <Box
+                    key={tripIndex}
+                    sx={{ display: "flex", gap: 2, alignItems: "center" }}
+                  >
+                    <TextField
+                      label="Start Date"
+                      type="date"
+                      value={trip.startDate.split("T")[0]}
+                      onChange={(e) => {
+                        const newCities = [...currentData.cities];
+                        newCities[cityIndex].trips[tripIndex].startDate =
+                          new Date(e.target.value).toISOString();
+                        setCurrentData((prev) => ({
+                          ...prev,
+                          cities: newCities,
+                        }));
+                      }}
+                      InputLabelProps={{
+                        shrink: true,
+                      }}
+                    />
+                    <TextField
+                      label="End Date"
+                      type="date"
+                      value={trip.endDate.split("T")[0]}
+                      onChange={(e) => {
+                        const newCities = [...currentData.cities];
+                        newCities[cityIndex].trips[tripIndex].endDate =
+                          new Date(e.target.value).toISOString();
+                        setCurrentData((prev) => ({
+                          ...prev,
+                          cities: newCities,
+                        }));
+                      }}
+                      InputLabelProps={{
+                        shrink: true,
+                      }}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            ))}
+            <Button startIcon={<AddIcon />} onClick={addCity}>
+              Add City
+            </Button>
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setVisitDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleSaveVisit}
-            variant="contained"
-            disabled={loading}
-          >
-            {loading ? (
-              <CircularProgress size={24} />
-            ) : isEditMode ? (
-              "Update"
-            ) : (
-              "Save"
-            )}
+          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSave} variant="contained">
+            Save
           </Button>
         </DialogActions>
       </Dialog>

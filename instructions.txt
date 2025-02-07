@@ -1,7 +1,64 @@
-As you can see, I've already created a basic nextjs application. In the “app/page.tsx” file, I want you to create the following elements for me:
+Generate a Next.js component that displays an interactive world map using React Leaflet. The map should allow users to switch between different tile styles (default, satellite, and terrain). Users can search for a country using an autocomplete input, and upon selection, the map should center on that country with an appropriate zoom level. The component should:
+
+Use dynamic imports for React Leaflet components to ensure proper rendering with Next.js.
+Fetch GeoJSON data from a public source to display country boundaries.
+Implement a function to determine the center of a selected country and update the map accordingly.
+Maintain a clean UI with Material-UI components (Autocomplete, Select dropdown, and Paper).
+Handle loading states properly while fetching data.
+Ensure the map updates correctly when changing styles or selecting a new country.
+Avoid re-initializing Leaflet multiple times to prevent errors related to SSR in Next.js.
+Use functional components and React hooks (useState, useEffect). The map should be responsive and have a height of 500px
 
 
-- it's a world map where you can select a country, see the global map, navigate on the map, in a fluid and modern way. 
-- The user will have a search field where he can type in a country, the map of this country will appear and the user will be able to navigate the map.
-- The user can select a country and indicate that you've visited it. you can add the color, and  add information such as whether he has just been there, whether he has traveled there, whether he lived there. with the addition of one or more dates and noted information. 
-- The style on the map can be selected, the default is simple with black lines and white background
+
+
+Application context :
+An interactive map allows users to view the countries they have visited. By clicking on a country, a modal opens to add or modify trips made in that country.
+
+Data stored by country :
+One or more travel date ranges.
+A customizable color chosen by the user.
+An overall comment on the country.
+Stored data by city:
+One or more travel date ranges (as for country).
+A city-specific color (may be different from that of the country).
+A city-specific comment.
+Interface functionality:
+The user clicks on a country, which opens a modal for adding/editing trips.
+In this modal, you can manage the dates of your visits, the color of the country, and your commentary.
+A special section displays the cities visited one by one.
+Each city can be edited with its visit dates, personalized color and commentary.
+The interface remains ergonomic and fluid, so as not to display too much information at once.
+Stored data (JSON format expected):
+Example for a country :
+
+
+JSON
+
+{
+  "pays": "Thaïlande",
+  "couleur": "#ff5733",
+  "commentaire": "Voyage incroyable, surtout la cuisine.",
+  "voyages": [
+    { "date_debut": "2023-01-10", "date_fin": "2023-01-25" },
+    { "date_debut": "2024-02-05", "date_fin": "2024-02-15" }
+  ],
+  "villes": [
+    {
+      "nom": "Bangkok",
+      "couleur": "#33ff57",
+      "commentaire": "Street food incroyable et temples magnifiques.",
+      "voyages": [
+        { "date_debut": "2023-01-12", "date_fin": "2023-01-15" }
+      ]
+    },
+    {
+      "nom": "Chiang Mai",
+      "couleur": "#5733ff",
+      "commentaire": "Ville plus calme, idéale pour explorer le nord.",
+      "voyages": [
+        { "date_debut": "2023-01-18", "date_fin": "2023-01-22" }
+      ]
+    }
+  ]
+}
