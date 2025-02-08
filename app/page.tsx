@@ -74,17 +74,18 @@ function FocusOnCountry({
 
       if (countryFeature) {
         try {
-          const allCoords: number[][] = [];
+          const allCoords: [number, number][] = [];
 
-          const extractCoords = (coords: number[][]) => {
+          const extractCoords = (coords: any): void => {
             if (
+              Array.isArray(coords) &&
               coords.length === 2 &&
               typeof coords[0] === "number" &&
               typeof coords[1] === "number"
             ) {
-              allCoords.push(coords);
-            } else {
-              coords.forEach((c) => extractCoords(c));
+              allCoords.push([coords[0], coords[1]]);
+            } else if (Array.isArray(coords)) {
+              coords.forEach(extractCoords);
             }
           };
 
