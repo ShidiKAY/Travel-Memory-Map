@@ -21,6 +21,7 @@ import { ChromePicker } from "react-color";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import "tailwindcss/tailwind.css";
 
 interface TravelData {
@@ -99,26 +100,21 @@ function FocusOnCountry({
               (bounds.getNorth() - bounds.getSouth()) *
               (bounds.getEast() - bounds.getWest());
 
-            // Adjust padding based on country size but keep it minimal
             let zoomPadding;
             if (area > 1000) {
-              // Very large countries like Russia
               zoomPadding = [50, 50];
             } else if (area > 100) {
-              // Large countries
               zoomPadding = [30, 30];
             } else if (area > 10) {
-              // Medium countries
               zoomPadding = [20, 20];
             } else {
-              // Small countries
               zoomPadding = [10, 10];
             }
 
             map.flyToBounds(bounds, {
               padding: zoomPadding,
               duration: 1,
-              maxZoom: 8, // Allow closer zoom for better visibility
+              maxZoom: 8,
             });
           }
         } catch (error) {
@@ -177,7 +173,6 @@ export default function Home() {
     )
       .then((response) => response.json())
       .then((data) => {
-        // Filter out archipelagos but keep individual islands
         const excludedNames = ["Maldives", "Archipelago", "Islands", "Isles"];
 
         const filteredFeatures = data.features.filter((f: GeoJSONFeature) => {
@@ -212,10 +207,8 @@ export default function Home() {
     const timeDiff = currentTime - lastClickTime;
 
     if (timeDiff < 300) {
-      // Double click
       setSelectedCountry(countryName);
     } else {
-      // Single click
       const countryData = travelData[countryName] || {
         country: countryName,
         color: "#1976d2",
@@ -298,9 +291,13 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto space-y-4">
-        <div className="flex flex-wrap gap-4 items-center">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50">
+      <div className="max-w-7xl mx-auto p-8">
+        <h1 className="text-4xl font-bold text-gray-800 mb-8 text-center">
+          Travel Memory Map
+        </h1>
+
+        <div className="flex flex-wrap gap-6 items-center mb-8">
           <div className="flex-grow max-w-md">
             <Autocomplete
               options={countries}
@@ -308,7 +305,7 @@ export default function Home() {
                 <TextField
                   {...params}
                   label="Search Country"
-                  className="bg-white rounded-lg"
+                  className="bg-white rounded-xl shadow-lg"
                 />
               )}
               onChange={(_, value) => handleCountrySelect(value)}
@@ -316,7 +313,7 @@ export default function Home() {
               isOptionEqualToValue={(option, value) => option === value}
             />
           </div>
-          <FormControl className="min-w-[200px] bg-white rounded-lg">
+          <FormControl className="min-w-[200px] bg-white rounded-xl shadow-lg">
             <InputLabel>Map Style</InputLabel>
             <Select
               value={mapStyle}
@@ -332,7 +329,7 @@ export default function Home() {
           </FormControl>
         </div>
 
-        <div className="h-[70vh] rounded-xl shadow-lg overflow-hidden">
+        <div className="h-[75vh] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-sm bg-white/30">
           <MapContainer
             center={[20, 0]}
             zoom={2}
@@ -363,23 +360,20 @@ export default function Home() {
                     const center = bounds.getCenter();
                     const area = bounds.getNorth() - bounds.getSouth();
 
-                    // More selective label display based on zoom and country size
                     const minZoomForLabels = 3;
                     const shouldShowLabel = () => {
                       if (zoomLevel < minZoomForLabels) return false;
 
-                      // Base importance on area and status
                       const importance =
                         (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
                         (travelData[feature.properties.name] ? 2 : 0) +
                         (feature.properties.name === selectedCountry ? 3 : 0);
 
-                      // Stricter conditions for label display
                       return (
-                        zoomLevel >= 7 || // Show all at high zoom
-                        (zoomLevel >= 5 && importance >= 4) || // Show important at medium zoom
-                        (zoomLevel >= 4 && importance >= 6) || // Show very important at medium-low zoom
-                        (zoomLevel >= 3 && importance >= 7) // Show only most important at low zoom
+                        zoomLevel >= 7 ||
+                        (zoomLevel >= 5 && importance >= 4) ||
+                        (zoomLevel >= 4 && importance >= 6) ||
+                        (zoomLevel >= 3 && importance >= 7)
                       );
                     };
 
@@ -399,20 +393,20 @@ export default function Home() {
                                 ? "700"
                                 : "500"
                             };
-                            background-color: rgba(255, 255, 255, 0.9);
+                            background-color: rgba(255, 255, 255, 0.95);
                             padding: ${baseFontSize / 4}px ${
                           baseFontSize / 2
                         }px;
-                            border-radius: ${baseFontSize / 4}px;
+                            border-radius: ${baseFontSize / 2}px;
                             border: 1px solid rgba(0, 0, 0, 0.1);
-                            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
                             white-space: nowrap;
                             pointer-events: none;
                             transform: translate(-50%, -50%);
                             opacity: ${
                               feature.properties.name === selectedCountry
                                 ? "1"
-                                : "0.8"
+                                : "0.9"
                             };
                           ">${feature.properties.name}</div>
                         `,
@@ -444,14 +438,16 @@ export default function Home() {
                     if (feature.properties.name === selectedCountry) {
                       layer
                         .bindPopup(
-                          `<div class="text-center">
-                          <strong>${feature.properties.name}</strong>
-                          ${
-                            feature.properties.name_local
-                              ? `<br/><em>${feature.properties.name_local}</em>`
-                              : ""
-                          }
-                        </div>`
+                          `<div class="text-center p-2">
+                            <strong class="text-lg">${
+                              feature.properties.name
+                            }</strong>
+                            ${
+                              feature.properties.name_local
+                                ? `<br/><em class="text-gray-600">${feature.properties.name_local}</em>`
+                                : ""
+                            }
+                          </div>`
                         )
                         .openPopup();
                     }
@@ -467,14 +463,23 @@ export default function Home() {
           onClose={() => setDialogOpen(false)}
           maxWidth="md"
           fullWidth
-          className="rounded-lg"
+          className="rounded-2xl"
+          PaperProps={{
+            className: "rounded-2xl",
+          }}
         >
-          <DialogTitle className="bg-gray-50 border-b">
+          <DialogTitle className="bg-gray-800 text-white py-6 font-bold text-2xl">
             {selectedCountry}
           </DialogTitle>
-          <DialogContent className="space-y-6 p-6">
-            <div className="grid gap-6">
-              <div className="p-4 bg-white rounded-lg shadow">
+          <DialogContent className="space-y-8 p-8">
+            <div className="grid gap-8">
+              <div className="p-6 bg-white rounded-xl shadow-lg">
+                <Typography
+                  variant="h6"
+                  className="mb-4 font-bold text-gray-700"
+                >
+                  Country Color
+                </Typography>
                 <ChromePicker
                   color={currentData.color}
                   onChange={(color) =>
@@ -494,17 +499,17 @@ export default function Home() {
                     comment: e.target.value,
                   }))
                 }
-                className="bg-white rounded-lg"
+                className="bg-white rounded-xl shadow-lg"
               />
 
-              <div className="space-y-4">
-                <Typography variant="h6" className="font-bold">
+              <div className="space-y-6">
+                <Typography variant="h6" className="font-bold text-gray-700">
                   Trips
                 </Typography>
                 {currentData.trips.map((trip, index) => (
                   <div
                     key={index}
-                    className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-lg shadow"
+                    className="flex flex-wrap gap-4 items-center bg-white p-6 rounded-xl shadow-lg transition-all hover:shadow-xl"
                   >
                     <TextField
                       label="Start Date"
@@ -552,7 +557,7 @@ export default function Home() {
                           trips: newTrips,
                         }));
                       }}
-                      className="text-red-500 hover:text-red-700"
+                      className="text-red-500 hover:text-red-700 transition-colors"
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -572,20 +577,20 @@ export default function Home() {
                       ],
                     }));
                   }}
-                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full py-3 px-6 transition-all"
                 >
                   Add Trip
                 </Button>
               </div>
 
-              <div className="space-y-4">
-                <Typography variant="h6" className="font-bold">
+              <div className="space-y-6">
+                <Typography variant="h6" className="font-bold text-gray-700">
                   Cities
                 </Typography>
                 {currentData.cities.map((city, cityIndex) => (
                   <div
                     key={cityIndex}
-                    className="bg-white p-6 rounded-lg shadow space-y-4"
+                    className="bg-white p-8 rounded-xl shadow-lg space-y-6 transition-all hover:shadow-xl"
                   >
                     <TextField
                       label="City Name"
@@ -599,18 +604,21 @@ export default function Home() {
                         }));
                       }}
                       fullWidth
+                      className="rounded-lg"
                     />
-                    <ChromePicker
-                      color={city.color}
-                      onChange={(color) => {
-                        const newCities = [...currentData.cities];
-                        newCities[cityIndex].color = color.hex;
-                        setCurrentData((prev) => ({
-                          ...prev,
-                          cities: newCities,
-                        }));
-                      }}
-                    />
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <ChromePicker
+                        color={city.color}
+                        onChange={(color) => {
+                          const newCities = [...currentData.cities];
+                          newCities[cityIndex].color = color.hex;
+                          setCurrentData((prev) => ({
+                            ...prev,
+                            cities: newCities,
+                          }));
+                        }}
+                      />
+                    </div>
                     <TextField
                       label="City Comment"
                       multiline
@@ -625,11 +633,12 @@ export default function Home() {
                         }));
                       }}
                       fullWidth
+                      className="rounded-lg"
                     />
                     {city.trips.map((trip, tripIndex) => (
                       <div
                         key={tripIndex}
-                        className="flex flex-wrap gap-4 items-center"
+                        className="flex flex-wrap gap-4 items-center p-4 bg-gray-50 rounded-lg"
                       >
                         <TextField
                           label="Start Date"
@@ -672,31 +681,31 @@ export default function Home() {
                 <Button
                   startIcon={<AddIcon />}
                   onClick={addCity}
-                  className="bg-green-500 hover:bg-green-600 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full py-3 px-6 transition-all"
                 >
                   Add City
                 </Button>
               </div>
             </div>
           </DialogContent>
-          <DialogActions className="p-4 bg-gray-50 border-t">
+          <DialogActions className="p-6 bg-gray-50 border-t">
             <Button
               onClick={handleRemoveCountry}
-              className="text-red-600 hover:text-red-800"
+              className="text-red-600 hover:text-red-800 transition-colors"
               startIcon={<DeleteIcon />}
             >
               Remove Country
             </Button>
             <Button
               onClick={() => setDialogOpen(false)}
-              className="text-gray-600 hover:text-gray-800"
+              className="text-gray-600 hover:text-gray-800 transition-colors"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
               variant="contained"
-              className="bg-blue-500 hover:bg-blue-600"
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-full py-2 px-6 transition-all"
             >
               Save
             </Button>
