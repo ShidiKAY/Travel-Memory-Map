@@ -103,7 +103,7 @@ function FocusOnCountry({
               (bounds.getNorth() - bounds.getSouth()) *
               (bounds.getEast() - bounds.getWest());
 
-            let zoomPadding;
+            let zoomPadding: [number, number];
             if (area > 1000) {
               zoomPadding = [50, 50];
             } else if (area > 100) {
