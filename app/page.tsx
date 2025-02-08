@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMap, Popup } from "react-leaflet";
+import { useState, useEffect } from "react";
+import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import {
-  Box,
   Autocomplete,
   TextField,
   Dialog,
@@ -15,7 +14,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Paper,
   IconButton,
   Typography,
 } from "@mui/material";
@@ -23,6 +21,7 @@ import { ChromePicker } from "react-color";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import L from "leaflet";
+import "tailwindcss/tailwind.css";
 
 interface TravelData {
   country: string;
@@ -47,15 +46,15 @@ interface GeoJSONFeature {
   type: string;
   properties: {
     name: string;
-    name_local?: string; // Optional local name
+    name_local?: string;
+    continent?: string;
   };
   geometry: {
     type: string;
-    coordinates: any[];
+    coordinates: number[][];
   };
 }
 
-// Component to handle map focus changes
 function FocusOnCountry({
   country,
   geoJsonData,
@@ -67,7 +66,6 @@ function FocusOnCountry({
 }) {
   const map = useMap();
 
-  // Add map move handler
   useEffect(() => {
     map.on("movestart", onMapMove);
     return () => {
@@ -83,10 +81,9 @@ function FocusOnCountry({
 
       if (countryFeature) {
         try {
-          // Handle different geometry types
           const allCoords: number[][] = [];
 
-          const extractCoords = (coords: any[]) => {
+          const extractCoords = (coords: number[][]) => {
             if (
               coords.length === 2 &&
               typeof coords[0] === "number" &&
@@ -148,8 +145,12 @@ export default function Home() {
     ],
     cities: [],
   });
+  const [zoomLevel, setZoomLevel] = useState(2);
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [lastClickedCountry, setLastClickedCountry] = useState<string | null>(
+    null
+  );
 
-  // Load data from localStorage on initial render
   useEffect(() => {
     const savedData = localStorage.getItem("travelData");
     if (savedData) {
@@ -180,9 +181,14 @@ export default function Home() {
   });
 
   const handleCountryClick = (countryName: string) => {
-    setSelectedCountry(countryName);
-    setCurrentData(
-      travelData[countryName] || {
+    const now = Date.now();
+    const isDoubleClick =
+      now - lastClickTime < 300 && countryName === lastClickedCountry;
+    setLastClickTime(now);
+    setLastClickedCountry(countryName);
+
+    if (isDoubleClick || countryName === selectedCountry) {
+      const countryData = travelData[countryName] || {
         country: countryName,
         color: "#1976d2",
         comment: "",
@@ -193,21 +199,36 @@ export default function Home() {
           },
         ],
         cities: [],
-      }
-    );
-    setDialogOpen(true);
+      };
+      setCurrentData(countryData);
+      setSelectedCountry(countryName);
+      setDialogOpen(true);
+    } else {
+      setSelectedCountry(countryName);
+    }
   };
 
   const handleCountrySelect = (countryName: string | null) => {
     if (countryName) {
       setSelectedCountry(countryName);
+      const countryData = travelData[countryName] || {
+        country: countryName,
+        color: "#1976d2",
+        comment: "",
+        trips: [
+          {
+            startDate: new Date().toISOString(),
+            endDate: new Date().toISOString(),
+          },
+        ],
+        cities: [],
+      };
+      setCurrentData(countryData);
+      setDialogOpen(true);
     }
   };
 
-  const handleMapMove = () => {
-    // Don't clear selection when map moves
-    // setSelectedCountry(null);
-  };
+  const handleMapMove = () => {};
 
   const handleSave = () => {
     if (selectedCountry) {
@@ -216,7 +237,6 @@ export default function Home() {
         [selectedCountry]: currentData,
       };
       setTravelData(newTravelData);
-      // Save to localStorage
       localStorage.setItem("travelData", JSON.stringify(newTravelData));
     }
     setDialogOpen(false);
@@ -243,247 +263,223 @@ export default function Home() {
   };
 
   return (
-    <Box
-      sx={{
-        height: "100vh",
-        p: 2,
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-      }}
-    >
-      <Box sx={{ display: "flex", gap: 2 }}>
-        <Autocomplete
-          options={countries}
-          sx={{ width: 300 }}
-          renderInput={(params) => (
-            <TextField {...params} label="Search Country" />
-          )}
-          onChange={(_, value) => handleCountrySelect(value)}
-          value={selectedCountry}
-          isOptionEqualToValue={(option, value) => option === value}
-        />
-        <FormControl sx={{ width: 200 }}>
-          <InputLabel>Map Style</InputLabel>
-          <Select
-            value={mapStyle}
-            label="Map Style"
-            onChange={(e) =>
-              setMapStyle(e.target.value as keyof typeof MAP_STYLES)
-            }
-          >
-            <MenuItem value="default">Default</MenuItem>
-            <MenuItem value="satellite">Satellite</MenuItem>
-            <MenuItem value="terrain">Terrain</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
-
-      <Paper elevation={3} sx={{ flexGrow: 1 }}>
-        <MapContainer
-          center={[20, 0]}
-          zoom={2}
-          style={{ height: "100%", width: "100%" }}
-          scrollWheelZoom={true}
-        >
-          <TileLayer url={MAP_STYLES[mapStyle]} />
-          {geoJsonData && (
-            <>
-              <FocusOnCountry
-                country={selectedCountry}
-                geoJsonData={geoJsonData}
-                onMapMove={handleMapMove}
-              />
-              <GeoJSON
-                data={geoJsonData}
-                style={getCountryStyle}
-                onEachFeature={(feature, layer) => {
-                  layer.on({
-                    click: () => handleCountryClick(feature.properties.name),
-                  });
-                  if (feature.properties.name === selectedCountry) {
-                    const center = layer.getBounds().getCenter();
-                    layer
-                      .bindPopup(
-                        `<div style="text-align: center">
-                        <strong>${feature.properties.name}</strong>
-                        ${
-                          feature.properties.name_local
-                            ? `<br/><em>${feature.properties.name_local}</em>`
-                            : ""
-                        }
-                      </div>`
-                      )
-                      .openPopup();
-                  }
-                }}
-              />
-            </>
-          )}
-        </MapContainer>
-      </Paper>
-
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>{selectedCountry}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
-            <ChromePicker
-              color={currentData.color}
-              onChange={(color) =>
-                setCurrentData((prev) => ({ ...prev, color: color.hex }))
-              }
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-7xl mx-auto space-y-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex-grow max-w-md">
+            <Autocomplete
+              options={countries}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Search Country"
+                  className="bg-white rounded-lg"
+                />
+              )}
+              onChange={(_, value) => handleCountrySelect(value)}
+              value={selectedCountry}
+              isOptionEqualToValue={(option, value) => option === value}
             />
-
-            <TextField
-              label="Country Comment"
-              multiline
-              rows={4}
-              value={currentData.comment}
+          </div>
+          <FormControl className="min-w-[200px] bg-white rounded-lg">
+            <InputLabel>Map Style</InputLabel>
+            <Select
+              value={mapStyle}
+              label="Map Style"
               onChange={(e) =>
-                setCurrentData((prev) => ({
-                  ...prev,
-                  comment: e.target.value,
-                }))
+                setMapStyle(e.target.value as keyof typeof MAP_STYLES)
               }
-            />
-
-            <Typography variant="h6">Trips</Typography>
-            {currentData.trips.map((trip, index) => (
-              <Box
-                key={index}
-                sx={{ display: "flex", gap: 2, alignItems: "center" }}
-              >
-                <TextField
-                  label="Start Date"
-                  type="date"
-                  value={trip.startDate.split("T")[0]}
-                  onChange={(e) => {
-                    const newTrips = [...currentData.trips];
-                    newTrips[index].startDate = new Date(
-                      e.target.value
-                    ).toISOString();
-                    setCurrentData((prev) => ({
-                      ...prev,
-                      trips: newTrips,
-                    }));
-                  }}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
-                <TextField
-                  label="End Date"
-                  type="date"
-                  value={trip.endDate.split("T")[0]}
-                  onChange={(e) => {
-                    const newTrips = [...currentData.trips];
-                    newTrips[index].endDate = new Date(
-                      e.target.value
-                    ).toISOString();
-                    setCurrentData((prev) => ({
-                      ...prev,
-                      trips: newTrips,
-                    }));
-                  }}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
-                <IconButton
-                  onClick={() => {
-                    const newTrips = currentData.trips.filter(
-                      (_, i) => i !== index
-                    );
-                    setCurrentData((prev) => ({ ...prev, trips: newTrips }));
-                  }}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Box>
-            ))}
-            <Button
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setCurrentData((prev) => ({
-                  ...prev,
-                  trips: [
-                    ...prev.trips,
-                    {
-                      startDate: new Date().toISOString(),
-                      endDate: new Date().toISOString(),
-                    },
-                  ],
-                }));
-              }}
             >
-              Add Trip
-            </Button>
+              <MenuItem value="default">Default</MenuItem>
+              <MenuItem value="satellite">Satellite</MenuItem>
+              <MenuItem value="terrain">Terrain</MenuItem>
+            </Select>
+          </FormControl>
+        </div>
 
-            <Typography variant="h6">Cities</Typography>
-            {currentData.cities.map((city, cityIndex) => (
-              <Box
-                key={cityIndex}
-                sx={{ border: "1px solid #ddd", p: 2, borderRadius: 1 }}
-              >
-                <TextField
-                  label="City Name"
-                  value={city.name}
-                  onChange={(e) => {
-                    const newCities = [...currentData.cities];
-                    newCities[cityIndex].name = e.target.value;
-                    setCurrentData((prev) => ({
-                      ...prev,
-                      cities: newCities,
-                    }));
+        <div className="h-[70vh] rounded-xl shadow-lg overflow-hidden">
+          <MapContainer
+            center={[20, 0]}
+            zoom={2}
+            className="h-full w-full"
+            scrollWheelZoom={true}
+            whenReady={(map) => {
+              map.target.on("zoomend", () => {
+                setZoomLevel(map.target.getZoom());
+              });
+            }}
+          >
+            <TileLayer url={MAP_STYLES[mapStyle]} />
+            {geoJsonData && (
+              <>
+                <FocusOnCountry
+                  country={selectedCountry}
+                  geoJsonData={geoJsonData}
+                  onMapMove={handleMapMove}
+                />
+                <GeoJSON
+                  data={geoJsonData}
+                  style={getCountryStyle}
+                  onEachFeature={(feature, layer) => {
+                    const bounds = layer.getBounds();
+                    const center = bounds.getCenter();
+                    const area = bounds.getNorth() - bounds.getSouth();
+
+                    // More selective label display based on zoom and country size
+                    const minZoomForLabels = 3;
+                    const shouldShowLabel = () => {
+                      if (zoomLevel < minZoomForLabels) return false;
+
+                      // Base importance on area and status
+                      const importance =
+                        (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
+                        (travelData[feature.properties.name] ? 2 : 0) +
+                        (feature.properties.name === selectedCountry ? 3 : 0);
+
+                      // Stricter conditions for label display
+                      return (
+                        zoomLevel >= 7 || // Show all at high zoom
+                        (zoomLevel >= 5 && importance >= 4) || // Show important at medium zoom
+                        (zoomLevel >= 4 && importance >= 6) || // Show very important at medium-low zoom
+                        (zoomLevel >= 3 && importance >= 7) // Show only most important at low zoom
+                      );
+                    };
+
+                    if (shouldShowLabel()) {
+                      const baseFontSize = Math.min(
+                        Math.max(8, area * (zoomLevel / 3)),
+                        14
+                      );
+
+                      const label = L.divIcon({
+                        className: "country-label",
+                        html: `
+                          <div style="
+                            font-size: ${baseFontSize}px;
+                            font-weight: ${
+                              feature.properties.name === selectedCountry
+                                ? "700"
+                                : "500"
+                            };
+                            background-color: rgba(255, 255, 255, 0.9);
+                            padding: ${baseFontSize / 4}px ${
+                          baseFontSize / 2
+                        }px;
+                            border-radius: ${baseFontSize / 4}px;
+                            border: 1px solid rgba(0, 0, 0, 0.1);
+                            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                            white-space: nowrap;
+                            pointer-events: none;
+                            transform: translate(-50%, -50%);
+                            opacity: ${
+                              feature.properties.name === selectedCountry
+                                ? "1"
+                                : "0.8"
+                            };
+                          ">${feature.properties.name}</div>
+                        `,
+                        iconSize: [0, 0],
+                        iconAnchor: [0, 0],
+                      });
+
+                      layer.on("add", (e) => {
+                        if (e.target._map) {
+                          const labelMarker = L.marker(center, {
+                            icon: label,
+                            zIndexOffset: Math.floor(area * 100),
+                          }).addTo(e.target._map);
+                          layer.labelMarker = labelMarker;
+                        }
+                      });
+
+                      layer.on("remove", () => {
+                        if (layer.labelMarker) {
+                          layer.labelMarker.remove();
+                        }
+                      });
+                    }
+
+                    layer.on({
+                      click: () => handleCountryClick(feature.properties.name),
+                    });
+
+                    if (feature.properties.name === selectedCountry) {
+                      layer
+                        .bindPopup(
+                          `<div class="text-center">
+                          <strong>${feature.properties.name}</strong>
+                          ${
+                            feature.properties.name_local
+                              ? `<br/><em>${feature.properties.name_local}</em>`
+                              : ""
+                          }
+                        </div>`
+                        )
+                        .openPopup();
+                    }
                   }}
                 />
+              </>
+            )}
+          </MapContainer>
+        </div>
+
+        <Dialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+          className="rounded-lg"
+        >
+          <DialogTitle className="bg-gray-50 border-b">
+            {selectedCountry}
+          </DialogTitle>
+          <DialogContent className="space-y-6 p-6">
+            <div className="grid gap-6">
+              <div className="p-4 bg-white rounded-lg shadow">
                 <ChromePicker
-                  color={city.color}
-                  onChange={(color) => {
-                    const newCities = [...currentData.cities];
-                    newCities[cityIndex].color = color.hex;
-                    setCurrentData((prev) => ({
-                      ...prev,
-                      cities: newCities,
-                    }));
-                  }}
+                  color={currentData.color}
+                  onChange={(color) =>
+                    setCurrentData((prev) => ({ ...prev, color: color.hex }))
+                  }
                 />
-                <TextField
-                  label="City Comment"
-                  multiline
-                  rows={2}
-                  value={city.comment}
-                  onChange={(e) => {
-                    const newCities = [...currentData.cities];
-                    newCities[cityIndex].comment = e.target.value;
-                    setCurrentData((prev) => ({
-                      ...prev,
-                      cities: newCities,
-                    }));
-                  }}
-                />
-                {/* City trips */}
-                {city.trips.map((trip, tripIndex) => (
-                  <Box
-                    key={tripIndex}
-                    sx={{ display: "flex", gap: 2, alignItems: "center" }}
+              </div>
+
+              <TextField
+                label="Country Comment"
+                multiline
+                rows={4}
+                value={currentData.comment}
+                onChange={(e) =>
+                  setCurrentData((prev) => ({
+                    ...prev,
+                    comment: e.target.value,
+                  }))
+                }
+                className="bg-white rounded-lg"
+              />
+
+              <div className="space-y-4">
+                <Typography variant="h6" className="font-bold">
+                  Trips
+                </Typography>
+                {currentData.trips.map((trip, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-lg shadow"
                   >
                     <TextField
                       label="Start Date"
                       type="date"
                       value={trip.startDate.split("T")[0]}
                       onChange={(e) => {
-                        const newCities = [...currentData.cities];
-                        newCities[cityIndex].trips[tripIndex].startDate =
-                          new Date(e.target.value).toISOString();
+                        const newTrips = [...currentData.trips];
+                        newTrips[index].startDate = new Date(
+                          e.target.value
+                        ).toISOString();
                         setCurrentData((prev) => ({
                           ...prev,
-                          cities: newCities,
+                          trips: newTrips,
                         }));
                       }}
                       InputLabelProps={{
@@ -495,34 +491,173 @@ export default function Home() {
                       type="date"
                       value={trip.endDate.split("T")[0]}
                       onChange={(e) => {
-                        const newCities = [...currentData.cities];
-                        newCities[cityIndex].trips[tripIndex].endDate =
-                          new Date(e.target.value).toISOString();
+                        const newTrips = [...currentData.trips];
+                        newTrips[index].endDate = new Date(
+                          e.target.value
+                        ).toISOString();
                         setCurrentData((prev) => ({
                           ...prev,
-                          cities: newCities,
+                          trips: newTrips,
                         }));
                       }}
                       InputLabelProps={{
                         shrink: true,
                       }}
                     />
-                  </Box>
+                    <IconButton
+                      onClick={() => {
+                        const newTrips = currentData.trips.filter(
+                          (_, i) => i !== index
+                        );
+                        setCurrentData((prev) => ({
+                          ...prev,
+                          trips: newTrips,
+                        }));
+                      }}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </div>
                 ))}
-              </Box>
-            ))}
-            <Button startIcon={<AddIcon />} onClick={addCity}>
-              Add City
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={() => {
+                    setCurrentData((prev) => ({
+                      ...prev,
+                      trips: [
+                        ...prev.trips,
+                        {
+                          startDate: new Date().toISOString(),
+                          endDate: new Date().toISOString(),
+                        },
+                      ],
+                    }));
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                >
+                  Add Trip
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <Typography variant="h6" className="font-bold">
+                  Cities
+                </Typography>
+                {currentData.cities.map((city, cityIndex) => (
+                  <div
+                    key={cityIndex}
+                    className="bg-white p-6 rounded-lg shadow space-y-4"
+                  >
+                    <TextField
+                      label="City Name"
+                      value={city.name}
+                      onChange={(e) => {
+                        const newCities = [...currentData.cities];
+                        newCities[cityIndex].name = e.target.value;
+                        setCurrentData((prev) => ({
+                          ...prev,
+                          cities: newCities,
+                        }));
+                      }}
+                      fullWidth
+                    />
+                    <ChromePicker
+                      color={city.color}
+                      onChange={(color) => {
+                        const newCities = [...currentData.cities];
+                        newCities[cityIndex].color = color.hex;
+                        setCurrentData((prev) => ({
+                          ...prev,
+                          cities: newCities,
+                        }));
+                      }}
+                    />
+                    <TextField
+                      label="City Comment"
+                      multiline
+                      rows={2}
+                      value={city.comment}
+                      onChange={(e) => {
+                        const newCities = [...currentData.cities];
+                        newCities[cityIndex].comment = e.target.value;
+                        setCurrentData((prev) => ({
+                          ...prev,
+                          cities: newCities,
+                        }));
+                      }}
+                      fullWidth
+                    />
+                    {city.trips.map((trip, tripIndex) => (
+                      <div
+                        key={tripIndex}
+                        className="flex flex-wrap gap-4 items-center"
+                      >
+                        <TextField
+                          label="Start Date"
+                          type="date"
+                          value={trip.startDate.split("T")[0]}
+                          onChange={(e) => {
+                            const newCities = [...currentData.cities];
+                            newCities[cityIndex].trips[tripIndex].startDate =
+                              new Date(e.target.value).toISOString();
+                            setCurrentData((prev) => ({
+                              ...prev,
+                              cities: newCities,
+                            }));
+                          }}
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                        />
+                        <TextField
+                          label="End Date"
+                          type="date"
+                          value={trip.endDate.split("T")[0]}
+                          onChange={(e) => {
+                            const newCities = [...currentData.cities];
+                            newCities[cityIndex].trips[tripIndex].endDate =
+                              new Date(e.target.value).toISOString();
+                            setCurrentData((prev) => ({
+                              ...prev,
+                              cities: newCities,
+                            }));
+                          }}
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={addCity}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Add City
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+          <DialogActions className="p-4 bg-gray-50 border-t">
+            <Button
+              onClick={() => setDialogOpen(false)}
+              className="text-gray-600 hover:text-gray-800"
+            >
+              Cancel
             </Button>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSave} variant="contained">
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              className="bg-blue-500 hover:bg-blue-600"
+            >
+              Save
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </div>
+    </div>
   );
 }
