@@ -23,12 +23,7 @@ import AddIcon from "@mui/icons-material/Add";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "tailwindcss/tailwind.css";
-import type {
-  Map as LeafletMap,
-  Layer,
-  FeatureGroup,
-  StyleFunction,
-} from "leaflet";
+import type { Layer, FeatureGroup, StyleFunction } from "leaflet";
 import type { Feature, Geometry, GeoJsonProperties } from "geojson";
 
 interface TravelData {
@@ -151,6 +146,43 @@ const MAP_STYLES = {
   satellite:
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   terrain: "https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg",
+};
+
+// Define the props interface
+interface MapContentProps {
+  setZoomLevel: (zoom: number) => void; // Type for setZoomLevel
+  setDialogOpen: (open: boolean) => void; // Type for setDialogOpen
+}
+
+// New MapContent component
+const MapContent: React.FC<MapContentProps> = ({
+  setZoomLevel,
+  setDialogOpen,
+}) => {
+  const map = useMap(); // Access the map instance
+
+  useEffect(() => {
+    const handleZoomEnd = () => {
+      setZoomLevel(map.getZoom());
+      setDialogOpen(false);
+    };
+
+    const handleMoveStart = () => {
+      setDialogOpen(false);
+    };
+
+    // Attach event listeners
+    map.on("zoomend", handleZoomEnd);
+    map.on("movestart", handleMoveStart);
+
+    // Cleanup function to remove event listeners
+    return () => {
+      map.off("zoomend", handleZoomEnd);
+      map.off("movestart", handleMoveStart);
+    };
+  }, [map, setZoomLevel, setDialogOpen]);
+
+  return null; // This component does not render anything
 };
 
 export default function Home() {
@@ -373,15 +405,6 @@ export default function Home() {
             zoom={2}
             className="h-full w-full"
             scrollWheelZoom={true}
-            whenReady={function (this: { target: LeafletMap }) {
-              this.target.on("zoomend", () => {
-                setZoomLevel(this.target.getZoom());
-                setDialogOpen(false);
-              });
-              this.target.on("movestart", () => {
-                setDialogOpen(false);
-              });
-            }}
           >
             <TileLayer url={MAP_STYLES[mapStyle]} />
             {geoJsonData && (
@@ -508,6 +531,10 @@ export default function Home() {
                         .openPopup();
                     }
                   }}
+                />
+                <MapContent
+                  setZoomLevel={setZoomLevel}
+                  setDialogOpen={setDialogOpen}
                 />
               </>
             )}
