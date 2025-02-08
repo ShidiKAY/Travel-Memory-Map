@@ -140,6 +140,7 @@ export default function Home() {
   } | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>("default");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [travelData, setTravelData] = useState<{ [key: string]: TravelData }>(
@@ -197,9 +198,23 @@ export default function Home() {
 
   const getCountryStyle = (feature: GeoJSONFeature) => ({
     fillColor: travelData[feature.properties.name]?.color || "#CCCCCC",
-    weight: feature.properties.name === selectedCountry ? 3 : 1,
-    color: feature.properties.name === selectedCountry ? "#000" : "#333",
-    fillOpacity: travelData[feature.properties.name] ? 0.8 : 0.6,
+    weight:
+      feature.properties.name === selectedCountry
+        ? 3
+        : feature.properties.name === hoveredCountry
+        ? 2
+        : 1,
+    color:
+      feature.properties.name === selectedCountry
+        ? "#000"
+        : feature.properties.name === hoveredCountry
+        ? "#444"
+        : "#333",
+    fillOpacity: travelData[feature.properties.name]
+      ? 0.8
+      : feature.properties.name === hoveredCountry
+      ? 0.7
+      : 0.6,
   });
 
   const handleCountryClick = (countryName: string) => {
@@ -367,13 +382,16 @@ export default function Home() {
                       const importance =
                         (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
                         (travelData[feature.properties.name] ? 2 : 0) +
-                        (feature.properties.name === selectedCountry ? 3 : 0);
+                        (feature.properties.name === selectedCountry ? 3 : 0) +
+                        (feature.properties.name === hoveredCountry ? 2 : 0);
 
                       return (
                         zoomLevel >= 7 ||
                         (zoomLevel >= 5 && importance >= 4) ||
                         (zoomLevel >= 4 && importance >= 6) ||
-                        (zoomLevel >= 3 && importance >= 7)
+                        (zoomLevel >= 3 && importance >= 7) ||
+                        feature.properties.name === selectedCountry ||
+                        feature.properties.name === hoveredCountry
                       );
                     };
 
@@ -391,6 +409,8 @@ export default function Home() {
                             font-weight: ${
                               feature.properties.name === selectedCountry
                                 ? "700"
+                                : feature.properties.name === hoveredCountry
+                                ? "600"
                                 : "500"
                             };
                             background-color: rgba(255, 255, 255, 0.95);
@@ -406,6 +426,8 @@ export default function Home() {
                             opacity: ${
                               feature.properties.name === selectedCountry
                                 ? "1"
+                                : feature.properties.name === hoveredCountry
+                                ? "0.95"
                                 : "0.9"
                             };
                           ">${feature.properties.name}</div>
@@ -433,6 +455,9 @@ export default function Home() {
 
                     layer.on({
                       click: () => handleCountryClick(feature.properties.name),
+                      mouseover: () =>
+                        setHoveredCountry(feature.properties.name),
+                      mouseout: () => setHoveredCountry(null),
                     });
 
                     if (feature.properties.name === selectedCountry) {
