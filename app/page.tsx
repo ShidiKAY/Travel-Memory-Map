@@ -76,7 +76,9 @@ function FocusOnCountry({
         try {
           const allCoords: [number, number][] = [];
 
-          const extractCoords = (coords: any): void => {
+          type GeoCoordinate = number | number[] | number[][];
+
+          const extractCoords = (coords: GeoCoordinate): void => {
             if (
               Array.isArray(coords) &&
               coords.length === 2 &&
@@ -85,7 +87,7 @@ function FocusOnCountry({
             ) {
               allCoords.push([coords[0], coords[1]]);
             } else if (Array.isArray(coords)) {
-              coords.forEach(extractCoords);
+              coords.forEach((c) => extractCoords(c));
             }
           };
 
