@@ -23,6 +23,13 @@ import AddIcon from "@mui/icons-material/Add";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "tailwindcss/tailwind.css";
+import type {
+  Map as LeafletMap,
+  Layer,
+  FeatureGroup,
+  StyleFunction,
+} from "leaflet";
+import type { Feature, Geometry, GeoJsonProperties } from "geojson";
 
 interface TravelData {
   country: string;
@@ -55,6 +62,15 @@ interface GeoJSONFeature {
     type: string;
     coordinates: number[][];
   };
+}
+
+interface GeoJSON {
+  type: "FeatureCollection";
+  features: GeoJSONFeature[];
+}
+
+interface ExtendedLayer extends Layer {
+  labelMarker?: L.Marker;
 }
 
 function FocusOnCountry({
@@ -138,9 +154,7 @@ const MAP_STYLES = {
 };
 
 export default function Home() {
-  const [geoJsonData, setGeoJsonData] = useState<{
-    features: GeoJSONFeature[];
-  } | null>(null);
+  const [geoJsonData, setGeoJsonData] = useState<GeoJSON | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
@@ -185,8 +199,8 @@ export default function Home() {
           );
         });
 
-        const filteredData = {
-          ...data,
+        const filteredData: GeoJSON = {
+          type: "FeatureCollection",
           features: filteredFeatures,
         };
 
@@ -199,26 +213,32 @@ export default function Home() {
       .catch((error) => console.error("Error loading map data:", error));
   }, []);
 
-  const getCountryStyle = (feature: GeoJSONFeature) => ({
-    fillColor: travelData[feature.properties.name]?.color || "#CCCCCC",
-    weight:
-      feature.properties.name === selectedCountry
-        ? 3
-        : feature.properties.name === hoveredCountry
-        ? 2
-        : 1,
-    color:
-      feature.properties.name === selectedCountry
-        ? "#000"
-        : feature.properties.name === hoveredCountry
-        ? "#444"
-        : "#333",
-    fillOpacity: travelData[feature.properties.name]
-      ? 0.8
-      : feature.properties.name === hoveredCountry
-      ? 0.7
-      : 0.6,
-  });
+  const getCountryStyle = (feature: Feature<Geometry, GeoJsonProperties>) => {
+    const featureProperties = feature?.properties || {}; // Provide a default empty object
+    return {
+      fillColor:
+        (featureProperties.name && travelData[featureProperties.name]?.color) ||
+        "#CCCCCC",
+      weight:
+        featureProperties.name === selectedCountry
+          ? 3
+          : featureProperties.name === hoveredCountry
+          ? 2
+          : 1,
+      color:
+        featureProperties.name === selectedCountry
+          ? "#000"
+          : featureProperties.name === hoveredCountry
+          ? "#444"
+          : "#333",
+      fillOpacity:
+        featureProperties.name && travelData[featureProperties.name]
+          ? 0.8
+          : featureProperties.name === hoveredCountry
+          ? 0.7
+          : 0.6,
+    };
+  };
 
   const handleCountryClick = (countryName: string) => {
     const currentTime = Date.now();
@@ -353,12 +373,12 @@ export default function Home() {
             zoom={2}
             className="h-full w-full"
             scrollWheelZoom={true}
-            whenReady={(map) => {
-              map.target.on("zoomend", () => {
-                setZoomLevel(map.target.getZoom());
+            whenReady={function (this: { target: LeafletMap }) {
+              this.target.on("zoomend", () => {
+                setZoomLevel(this.target.getZoom());
                 setDialogOpen(false);
               });
-              map.target.on("movestart", () => {
+              this.target.on("movestart", () => {
                 setDialogOpen(false);
               });
             }}
@@ -372,9 +392,16 @@ export default function Home() {
                 />
                 <GeoJSON
                   data={geoJsonData}
-                  style={getCountryStyle}
-                  onEachFeature={(feature, layer) => {
-                    const bounds = layer.getBounds();
+                  style={getCountryStyle as StyleFunction}
+                  onEachFeature={(
+                    feature: Feature<Geometry, GeoJsonProperties> | undefined,
+                    layer: ExtendedLayer
+                  ) => {
+                    if (!feature || !feature.properties) return; // Handle undefined feature or properties
+
+                    const geoJsonFeature =
+                      feature.properties as GeoJSONFeature["properties"]; // Type assertion
+                    const bounds = (layer as FeatureGroup).getBounds();
                     const center = bounds.getCenter();
                     const area = bounds.getNorth() - bounds.getSouth();
 
@@ -384,17 +411,19 @@ export default function Home() {
 
                       const importance =
                         (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
-                        (travelData[feature.properties.name] ? 2 : 0) +
-                        (feature.properties.name === selectedCountry ? 3 : 0) +
-                        (feature.properties.name === hoveredCountry ? 2 : 0);
+                        (geoJsonFeature && travelData[geoJsonFeature.name]
+                          ? 2
+                          : 0) + // Use geoJsonFeature
+                        (geoJsonFeature?.name === selectedCountry ? 3 : 0) +
+                        (geoJsonFeature?.name === hoveredCountry ? 2 : 0);
 
                       return (
                         zoomLevel >= 7 ||
                         (zoomLevel >= 5 && importance >= 4) ||
                         (zoomLevel >= 4 && importance >= 6) ||
                         (zoomLevel >= 3 && importance >= 7) ||
-                        feature.properties.name === selectedCountry ||
-                        feature.properties.name === hoveredCountry
+                        geoJsonFeature.name === selectedCountry ||
+                        geoJsonFeature.name === hoveredCountry
                       );
                     };
 
@@ -410,9 +439,9 @@ export default function Home() {
                           <div style="
                             font-size: ${baseFontSize}px;
                             font-weight: ${
-                              feature.properties.name === selectedCountry
+                              geoJsonFeature.name === selectedCountry
                                 ? "700"
-                                : feature.properties.name === hoveredCountry
+                                : geoJsonFeature.name === hoveredCountry
                                 ? "600"
                                 : "500"
                             };
@@ -427,13 +456,13 @@ export default function Home() {
                             pointer-events: none;
                             transform: translate(-50%, -50%);
                             opacity: ${
-                              feature.properties.name === selectedCountry
+                              geoJsonFeature.name === selectedCountry
                                 ? "1"
-                                : feature.properties.name === hoveredCountry
+                                : geoJsonFeature.name === hoveredCountry
                                 ? "0.95"
                                 : "0.9"
                             };
-                          ">${feature.properties.name}</div>
+                          ">${geoJsonFeature.name}</div>
                         `,
                         iconSize: [0, 0],
                         iconAnchor: [0, 0],
@@ -457,22 +486,21 @@ export default function Home() {
                     }
 
                     layer.on({
-                      click: () => handleCountryClick(feature.properties.name),
-                      mouseover: () =>
-                        setHoveredCountry(feature.properties.name),
+                      click: () => handleCountryClick(geoJsonFeature.name),
+                      mouseover: () => setHoveredCountry(geoJsonFeature.name),
                       mouseout: () => setHoveredCountry(null),
                     });
 
-                    if (feature.properties.name === selectedCountry) {
+                    if (geoJsonFeature.name === selectedCountry) {
                       layer
                         .bindPopup(
                           `<div class="text-center p-2">
                             <strong class="text-lg">${
-                              feature.properties.name
+                              geoJsonFeature.name
                             }</strong>
                             ${
-                              feature.properties.name_local
-                                ? `<br/><em class="text-gray-600">${feature.properties.name_local}</em>`
+                              geoJsonFeature?.name_local
+                                ? `<br/><em class="text-gray-600">${geoJsonFeature.name_local}</em>`
                                 : ""
                             }
                           </div>`
