@@ -1,10 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
-import { useMap } from "react-leaflet";
-import type { Layer, FeatureGroup, StyleFunction } from "leaflet";
-
+import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import {
   Autocomplete,
   TextField,
@@ -26,26 +23,8 @@ import AddIcon from "@mui/icons-material/Add";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "tailwindcss/tailwind.css";
-
+import type { Layer, FeatureGroup, StyleFunction } from "leaflet";
 import type { Feature, Geometry, GeoJsonProperties } from "geojson";
-
-// Dynamically import react-leaflet components with no SSR
-const MapContainer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const GeoJSON = dynamic(
-  () => import("react-leaflet").then((mod) => mod.GeoJSON),
-  { ssr: false }
-);
-// const useMap = dynamic(
-//   () => import("react-leaflet").then((mod) => mod.useMap),
-//   { ssr: false }
-// );
 
 interface TravelData {
   country: string;
@@ -230,13 +209,6 @@ export default function Home() {
   });
   const [zoomLevel, setZoomLevel] = useState(2);
   const [lastClickTime, setLastClickTime] = useState(0);
-
-  // State to track if the component is mounted on the client
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true); // Set to true after component mounts
-  }, []);
 
   useEffect(() => {
     const savedData = localStorage.getItem("travelData");
@@ -428,147 +400,145 @@ export default function Home() {
         </div>
 
         <div className="h-[75vh] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-sm bg-white/30">
-          {isClient && (
-            <MapContainer
-              center={[20, 0]}
-              zoom={2}
-              className="h-full w-full"
-              scrollWheelZoom={true}
-            >
-              <TileLayer url={MAP_STYLES[mapStyle]} />
-              {geoJsonData && (
-                <>
-                  <FocusOnCountry
-                    country={selectedCountry}
-                    geoJsonData={geoJsonData}
-                  />
-                  <GeoJSON
-                    data={geoJsonData}
-                    style={getCountryStyle as StyleFunction}
-                    onEachFeature={(
-                      feature: Feature<Geometry, GeoJsonProperties> | undefined,
-                      layer: ExtendedLayer
-                    ) => {
-                      if (!feature || !feature.properties) return; // Handle undefined feature or properties
+          <MapContainer
+            center={[20, 0]}
+            zoom={2}
+            className="h-full w-full"
+            scrollWheelZoom={true}
+          >
+            <TileLayer url={MAP_STYLES[mapStyle]} />
+            {geoJsonData && (
+              <>
+                <FocusOnCountry
+                  country={selectedCountry}
+                  geoJsonData={geoJsonData}
+                />
+                <GeoJSON
+                  data={geoJsonData}
+                  style={getCountryStyle as StyleFunction}
+                  onEachFeature={(
+                    feature: Feature<Geometry, GeoJsonProperties> | undefined,
+                    layer: ExtendedLayer
+                  ) => {
+                    if (!feature || !feature.properties) return; // Handle undefined feature or properties
 
-                      const geoJsonFeature =
-                        feature.properties as GeoJSONFeature["properties"]; // Type assertion
-                      const bounds = (layer as FeatureGroup).getBounds();
-                      const center = bounds.getCenter();
-                      const area = bounds.getNorth() - bounds.getSouth();
+                    const geoJsonFeature =
+                      feature.properties as GeoJSONFeature["properties"]; // Type assertion
+                    const bounds = (layer as FeatureGroup).getBounds();
+                    const center = bounds.getCenter();
+                    const area = bounds.getNorth() - bounds.getSouth();
 
-                      const minZoomForLabels = 3;
-                      const shouldShowLabel = () => {
-                        if (zoomLevel < minZoomForLabels) return false;
+                    const minZoomForLabels = 3;
+                    const shouldShowLabel = () => {
+                      if (zoomLevel < minZoomForLabels) return false;
 
-                        const importance =
-                          (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
-                          (geoJsonFeature && travelData[geoJsonFeature.name]
-                            ? 2
-                            : 0) + // Use geoJsonFeature
-                          (geoJsonFeature?.name === selectedCountry ? 3 : 0) +
-                          (geoJsonFeature?.name === hoveredCountry ? 2 : 0);
+                      const importance =
+                        (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
+                        (geoJsonFeature && travelData[geoJsonFeature.name]
+                          ? 2
+                          : 0) + // Use geoJsonFeature
+                        (geoJsonFeature?.name === selectedCountry ? 3 : 0) +
+                        (geoJsonFeature?.name === hoveredCountry ? 2 : 0);
 
-                        return (
-                          zoomLevel >= 7 ||
-                          (zoomLevel >= 5 && importance >= 4) ||
-                          (zoomLevel >= 4 && importance >= 6) ||
-                          (zoomLevel >= 3 && importance >= 7) ||
-                          geoJsonFeature.name === selectedCountry ||
-                          geoJsonFeature.name === hoveredCountry
-                        );
-                      };
+                      return (
+                        zoomLevel >= 7 ||
+                        (zoomLevel >= 5 && importance >= 4) ||
+                        (zoomLevel >= 4 && importance >= 6) ||
+                        (zoomLevel >= 3 && importance >= 7) ||
+                        geoJsonFeature.name === selectedCountry ||
+                        geoJsonFeature.name === hoveredCountry
+                      );
+                    };
 
-                      if (shouldShowLabel()) {
-                        const baseFontSize = Math.min(
-                          Math.max(8, area * (zoomLevel / 3)),
-                          14
-                        );
+                    if (shouldShowLabel()) {
+                      const baseFontSize = Math.min(
+                        Math.max(8, area * (zoomLevel / 3)),
+                        14
+                      );
 
-                        const label = L.divIcon({
-                          className: "country-label",
-                          html: `
-                            <div style="
-                              font-size: ${baseFontSize}px;
-                              font-weight: ${
-                                geoJsonFeature.name === selectedCountry
-                                  ? "700"
-                                  : geoJsonFeature.name === hoveredCountry
-                                  ? "600"
-                                  : "500"
-                              };
-                              background-color: rgba(255, 255, 255, 0.95);
-                              padding: ${baseFontSize / 4}px ${
-                            baseFontSize / 2
-                          }px;
-                              border-radius: ${baseFontSize / 2}px;
-                              border: 1px solid rgba(0, 0, 0, 0.1);
-                              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                              white-space: nowrap;
-                              pointer-events: none;
-                              transform: translate(-50%, -50%);
-                              opacity: ${
-                                geoJsonFeature.name === selectedCountry
-                                  ? "1"
-                                  : geoJsonFeature.name === hoveredCountry
-                                  ? "0.95"
-                                  : "0.9"
-                              };
-                            ">${geoJsonFeature.name}</div>
-                          `,
-                          iconSize: [0, 0],
-                          iconAnchor: [0, 0],
-                        });
-
-                        layer.on("add", (e) => {
-                          if (e.target._map) {
-                            const labelMarker = L.marker(center, {
-                              icon: label,
-                              zIndexOffset: Math.floor(area * 100),
-                            }).addTo(e.target._map);
-                            layer.labelMarker = labelMarker;
-                          }
-                        });
-
-                        layer.on("remove", () => {
-                          if (layer.labelMarker) {
-                            layer.labelMarker.remove();
-                          }
-                        });
-                      }
-
-                      layer.on({
-                        click: () => handleCountryClick(geoJsonFeature.name),
-                        mouseover: () => setHoveredCountry(geoJsonFeature.name),
-                        mouseout: () => setHoveredCountry(null),
+                      const label = L.divIcon({
+                        className: "country-label",
+                        html: `
+                          <div style="
+                            font-size: ${baseFontSize}px;
+                            font-weight: ${
+                              geoJsonFeature.name === selectedCountry
+                                ? "700"
+                                : geoJsonFeature.name === hoveredCountry
+                                ? "600"
+                                : "500"
+                            };
+                            background-color: rgba(255, 255, 255, 0.95);
+                            padding: ${baseFontSize / 4}px ${
+                          baseFontSize / 2
+                        }px;
+                            border-radius: ${baseFontSize / 2}px;
+                            border: 1px solid rgba(0, 0, 0, 0.1);
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                            white-space: nowrap;
+                            pointer-events: none;
+                            transform: translate(-50%, -50%);
+                            opacity: ${
+                              geoJsonFeature.name === selectedCountry
+                                ? "1"
+                                : geoJsonFeature.name === hoveredCountry
+                                ? "0.95"
+                                : "0.9"
+                            };
+                          ">${geoJsonFeature.name}</div>
+                        `,
+                        iconSize: [0, 0],
+                        iconAnchor: [0, 0],
                       });
 
-                      if (geoJsonFeature.name === selectedCountry) {
-                        layer
-                          .bindPopup(
-                            `<div class="text-center p-2">
-                              <strong class="text-lg">${
-                                geoJsonFeature.name
-                              }</strong>
-                              ${
-                                geoJsonFeature?.name_local
-                                  ? `<br/><em class="text-gray-600">${geoJsonFeature.name_local}</em>`
-                                  : ""
-                              }
-                            </div>`
-                          )
-                          .openPopup();
-                      }
-                    }}
-                  />
-                  <MapContent
-                    setZoomLevel={setZoomLevel}
-                    setDialogOpen={setDialogOpen}
-                  />
-                </>
-              )}
-            </MapContainer>
-          )}
+                      layer.on("add", (e) => {
+                        if (e.target._map) {
+                          const labelMarker = L.marker(center, {
+                            icon: label,
+                            zIndexOffset: Math.floor(area * 100),
+                          }).addTo(e.target._map);
+                          layer.labelMarker = labelMarker;
+                        }
+                      });
+
+                      layer.on("remove", () => {
+                        if (layer.labelMarker) {
+                          layer.labelMarker.remove();
+                        }
+                      });
+                    }
+
+                    layer.on({
+                      click: () => handleCountryClick(geoJsonFeature.name),
+                      mouseover: () => setHoveredCountry(geoJsonFeature.name),
+                      mouseout: () => setHoveredCountry(null),
+                    });
+
+                    if (geoJsonFeature.name === selectedCountry) {
+                      layer
+                        .bindPopup(
+                          `<div class="text-center p-2">
+                            <strong class="text-lg">${
+                              geoJsonFeature.name
+                            }</strong>
+                            ${
+                              geoJsonFeature?.name_local
+                                ? `<br/><em class="text-gray-600">${geoJsonFeature.name_local}</em>`
+                                : ""
+                            }
+                          </div>`
+                        )
+                        .openPopup();
+                    }
+                  }}
+                />
+                <MapContent
+                  setZoomLevel={setZoomLevel}
+                  setDialogOpen={setDialogOpen}
+                />
+              </>
+            )}
+          </MapContainer>
         </div>
 
         <Dialog
