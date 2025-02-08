@@ -48,6 +48,7 @@ interface GeoJSONFeature {
     name: string;
     name_local?: string;
     continent?: string;
+    featureType?: string;
   };
   geometry: {
     type: string;
@@ -58,20 +59,11 @@ interface GeoJSONFeature {
 function FocusOnCountry({
   country,
   geoJsonData,
-  onMapMove,
 }: {
   country: string | null;
   geoJsonData: { features: GeoJSONFeature[] } | null;
-  onMapMove: () => void;
 }) {
   const map = useMap();
-
-  useEffect(() => {
-    map.on("movestart", onMapMove);
-    return () => {
-      map.off("movestart", onMapMove);
-    };
-  }, [map, onMapMove]);
 
   useEffect(() => {
     if (country && geoJsonData) {
@@ -103,7 +95,31 @@ function FocusOnCountry({
 
           if (latLngs.length > 0) {
             const bounds = L.latLngBounds(latLngs);
-            map.flyToBounds(bounds, { padding: [50, 50], duration: 1 });
+            const area =
+              (bounds.getNorth() - bounds.getSouth()) *
+              (bounds.getEast() - bounds.getWest());
+
+            // Adjust padding based on country size but keep it minimal
+            let zoomPadding;
+            if (area > 1000) {
+              // Very large countries like Russia
+              zoomPadding = [50, 50];
+            } else if (area > 100) {
+              // Large countries
+              zoomPadding = [30, 30];
+            } else if (area > 10) {
+              // Medium countries
+              zoomPadding = [20, 20];
+            } else {
+              // Small countries
+              zoomPadding = [10, 10];
+            }
+
+            map.flyToBounds(bounds, {
+              padding: zoomPadding,
+              duration: 1,
+              maxZoom: 8, // Allow closer zoom for better visibility
+            });
           }
         } catch (error) {
           console.error("Error focusing on country:", error);
@@ -147,9 +163,6 @@ export default function Home() {
   });
   const [zoomLevel, setZoomLevel] = useState(2);
   const [lastClickTime, setLastClickTime] = useState(0);
-  const [lastClickedCountry, setLastClickedCountry] = useState<string | null>(
-    null
-  );
 
   useEffect(() => {
     const savedData = localStorage.getItem("travelData");
@@ -164,8 +177,22 @@ export default function Home() {
     )
       .then((response) => response.json())
       .then((data) => {
-        setGeoJsonData(data);
-        const countryNames = data.features
+        // Filter out archipelagos but keep individual islands
+        const excludedNames = ["Maldives", "Archipelago", "Islands", "Isles"];
+
+        const filteredFeatures = data.features.filter((f: GeoJSONFeature) => {
+          return !excludedNames.some((name) =>
+            f.properties.name.includes(name)
+          );
+        });
+
+        const filteredData = {
+          ...data,
+          features: filteredFeatures,
+        };
+
+        setGeoJsonData(filteredData);
+        const countryNames = filteredFeatures
           .map((f: GeoJSONFeature) => f.properties.name)
           .sort();
         setCountries(countryNames);
@@ -181,13 +208,14 @@ export default function Home() {
   });
 
   const handleCountryClick = (countryName: string) => {
-    const now = Date.now();
-    const isDoubleClick =
-      now - lastClickTime < 300 && countryName === lastClickedCountry;
-    setLastClickTime(now);
-    setLastClickedCountry(countryName);
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastClickTime;
 
-    if (isDoubleClick || countryName === selectedCountry) {
+    if (timeDiff < 300) {
+      // Double click
+      setSelectedCountry(countryName);
+    } else {
+      // Single click
       const countryData = travelData[countryName] || {
         country: countryName,
         color: "#1976d2",
@@ -203,9 +231,8 @@ export default function Home() {
       setCurrentData(countryData);
       setSelectedCountry(countryName);
       setDialogOpen(true);
-    } else {
-      setSelectedCountry(countryName);
     }
+    setLastClickTime(currentTime);
   };
 
   const handleCountrySelect = (countryName: string | null) => {
@@ -224,11 +251,8 @@ export default function Home() {
         cities: [],
       };
       setCurrentData(countryData);
-      setDialogOpen(true);
     }
   };
-
-  const handleMapMove = () => {};
 
   const handleSave = () => {
     if (selectedCountry) {
@@ -240,6 +264,17 @@ export default function Home() {
       localStorage.setItem("travelData", JSON.stringify(newTravelData));
     }
     setDialogOpen(false);
+  };
+
+  const handleRemoveCountry = () => {
+    if (selectedCountry) {
+      const newTravelData = { ...travelData };
+      delete newTravelData[selectedCountry];
+      setTravelData(newTravelData);
+      localStorage.setItem("travelData", JSON.stringify(newTravelData));
+      setDialogOpen(false);
+      setSelectedCountry(null);
+    }
   };
 
   const addCity = () => {
@@ -306,6 +341,10 @@ export default function Home() {
             whenReady={(map) => {
               map.target.on("zoomend", () => {
                 setZoomLevel(map.target.getZoom());
+                setDialogOpen(false);
+              });
+              map.target.on("movestart", () => {
+                setDialogOpen(false);
               });
             }}
           >
@@ -315,7 +354,6 @@ export default function Home() {
                 <FocusOnCountry
                   country={selectedCountry}
                   geoJsonData={geoJsonData}
-                  onMapMove={handleMapMove}
                 />
                 <GeoJSON
                   data={geoJsonData}
@@ -642,6 +680,13 @@ export default function Home() {
             </div>
           </DialogContent>
           <DialogActions className="p-4 bg-gray-50 border-t">
+            <Button
+              onClick={handleRemoveCountry}
+              className="text-red-600 hover:text-red-800"
+              startIcon={<DeleteIcon />}
+            >
+              Remove Country
+            </Button>
             <Button
               onClick={() => setDialogOpen(false)}
               className="text-gray-600 hover:text-gray-800"
