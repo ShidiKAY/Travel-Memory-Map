@@ -9,13 +9,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
+  FormControl,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel,
+  Button,
   IconButton,
   Typography,
+  Switch,
 } from "@mui/material";
 import { ChromePicker } from "react-color";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -185,6 +185,33 @@ const MapContent: React.FC<MapContentProps> = ({
   return null; // This component does not render anything
 };
 
+const translations = {
+  en: {
+    title: "Travel Memory Map",
+    explore: "Explore the World",
+    description1:
+      "Discover new places, track your travels, and create memories that last a lifetime. Our interactive map allows you to visualize your journeys and share your experiences with friends and family.",
+    description2:
+      "Whether you are planning your next adventure or reminiscing about past trips, our app provides the tools you need to document your travels. Add cities, trips, and personal notes to each location, and customize your map with colors that represent your experiences.",
+    description3:
+      "Join us on this journey and start mapping your adventures today!",
+    language: "Language",
+    darkMode: "Toggle Dark Mode",
+  },
+  fr: {
+    title: "Carte de Mémoire de Voyage",
+    explore: "Explorez le Monde",
+    description1:
+      "Découvrez de nouveaux endroits, suivez vos voyages et créez des souvenirs qui durent toute une vie. Notre carte interactive vous permet de visualiser vos voyages et de partager vos expériences avec vos amis et votre famille.",
+    description2:
+      "Que vous planifiez votre prochaine aventure ou que vous vous remémoriez des voyages passés, notre application vous fournit les outils nécessaires pour documenter vos voyages. Ajoutez des villes, des voyages et des notes personnelles à chaque emplacement, et personnalisez votre carte avec des couleurs qui représentent vos expériences.",
+    description3:
+      "Rejoignez-nous dans ce voyage et commencez à cartographier vos aventures dès aujourd'hui!",
+    language: "Langue",
+    darkMode: "Activer le mode sombre",
+  },
+};
+
 export default function Home() {
   const [geoJsonData, setGeoJsonData] = useState<GeoJSON | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
@@ -209,6 +236,10 @@ export default function Home() {
   });
   const [zoomLevel, setZoomLevel] = useState(2);
   const [lastClickTime, setLastClickTime] = useState(0);
+  const [language, setLanguage] = useState("en");
+  const [darkMode, setDarkMode] = useState<boolean>(false);
+
+  const t = translations[language as keyof typeof translations];
 
   useEffect(() => {
     const savedData = localStorage.getItem("travelData");
@@ -361,13 +392,91 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50">
+    <div
+      className={`min-h-screen ${
+        darkMode
+          ? "bg-gray-900 text-white"
+          : "bg-gradient-to-br from-indigo-50 to-blue-50"
+      }`}
+    >
       <div className="max-w-7xl mx-auto p-8">
-        <h1 className="text-4xl font-bold text-gray-800 mb-8 text-center">
-          Travel Memory Map
-        </h1>
+        {/* Controls under the title on the right */}
+        <div className="fixed top-4 right-4 z-50 flex items-center space-x-4">
+          <span className={darkMode ? "text-gray-200" : "text-gray-800"}>
+            🌐
+          </span>
+          <Switch
+            checked={language === "fr"}
+            onChange={() =>
+              setLanguage((prev) => (prev === "en" ? "fr" : "en"))
+            }
+            color={darkMode ? "default" : "primary"}
+            className={darkMode ? "text-gray-200" : "text-blue-600"}
+          />
+          <span className={darkMode ? "text-gray-200" : "text-gray-800"}>
+            🌙
+          </span>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={darkMode}
+              onChange={() => setDarkMode(!darkMode)}
+            />
+            <div
+              className={`w-10 h-6 ${
+                darkMode ? "bg-gray-600" : "bg-gray-300"
+              } rounded-full shadow-inner`}
+            ></div>
+            <div
+              className={`absolute w-4 h-4 ${
+                darkMode ? "bg-gray-200" : "bg-white"
+              } rounded-full shadow transform transition-transform duration-200 ease-in-out ${
+                darkMode ? "translate-x-4" : "translate-x-0"
+              }`}
+            ></div>
+          </label>
+        </div>
+
+        <h1 className="text-4xl font-bold mb-6 text-center">{t.title}</h1>
+
+        {/* Travel Design Section */}
+        <section
+          className={`mb-12 p-6 ${
+            darkMode ? "bg-gray-800" : "bg-white"
+          } rounded-lg shadow-lg`}
+        >
+          <h2
+            className={`text-3xl font-semibold mb-4 ${
+              darkMode ? "text-white" : "text-gray-900"
+            }`}
+          >
+            {t.explore}
+          </h2>
+          <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+            {t.description1}
+          </p>
+          <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+            {t.description2}
+          </p>
+          <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+            {t.description3}
+          </p>
+        </section>
 
         <div className="flex flex-wrap gap-6 items-center mb-8">
+          <FormControl className="min-w-[200px] bg-white rounded-xl shadow-lg">
+            <Select
+              value={mapStyle}
+              onChange={(e) =>
+                setMapStyle(e.target.value as keyof typeof MAP_STYLES)
+              }
+            >
+              <MenuItem value="default">Default</MenuItem>
+              <MenuItem value="satellite">Satellite</MenuItem>
+              <MenuItem value="terrain">Terrain</MenuItem>
+            </Select>
+          </FormControl>
           <div className="flex-grow max-w-md">
             <Autocomplete
               options={countries}
@@ -383,20 +492,6 @@ export default function Home() {
               isOptionEqualToValue={(option, value) => option === value}
             />
           </div>
-          <FormControl className="min-w-[200px] bg-white rounded-xl shadow-lg">
-            <InputLabel>Map Style</InputLabel>
-            <Select
-              value={mapStyle}
-              label="Map Style"
-              onChange={(e) =>
-                setMapStyle(e.target.value as keyof typeof MAP_STYLES)
-              }
-            >
-              <MenuItem value="default">Default</MenuItem>
-              <MenuItem value="satellite">Satellite</MenuItem>
-              <MenuItem value="terrain">Terrain</MenuItem>
-            </Select>
-          </FormControl>
         </div>
 
         <div className="h-[75vh] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-sm bg-white/30">
@@ -794,6 +889,23 @@ export default function Home() {
             </Button>
           </DialogActions>
         </Dialog>
+        <footer
+          className={`mt-12 p-6 ${
+            darkMode ? "bg-gray-700 text-gray-200" : "bg-white text-gray-600"
+          } rounded-lg shadow-lg`}
+        >
+          <h3 className="text-xl font-semibold mb-4">About This App</h3>
+          <p>
+            This app is designed to help you track your travels and create a
+            visual representation of your adventures. You can add countries,
+            cities, and trips, and customize your map with colors and comments.
+          </p>
+          <p>
+            Built with React, Leaflet, and Tailwind CSS, this app aims to
+            provide a seamless user experience for travel enthusiasts.
+          </p>
+          <p>2025 Travel Memory Map.</p>
+        </footer>
       </div>
     </div>
   );
