@@ -1,50 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
+import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import {
-  Box,
   Autocomplete,
   TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
+  FormControl,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel,
-  Paper,
+  Button,
   IconButton,
   Typography,
   Switch,
 } from "@mui/material";
-import { DatePicker } from "@mui/x-date-pickers";
-import { LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import { ChromePicker } from "react-color";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
-import { ChromePicker } from "react-color";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "tailwindcss/tailwind.css";
 import type { Layer, FeatureGroup, StyleFunction } from "leaflet";
 import type { Feature, Geometry, GeoJsonProperties } from "geojson";
-
-// Dynamically import map components with no SSR
-const MapContainer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const GeoJSON = dynamic(
-  () => import("react-leaflet").then((mod) => mod.GeoJSON),
-  { ssr: false }
-);
 
 interface TravelData {
   country: string;
@@ -233,7 +213,6 @@ const translations = {
 };
 
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
   const [geoJsonData, setGeoJsonData] = useState<GeoJSON | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
@@ -263,7 +242,6 @@ export default function Home() {
   const t = translations[language as keyof typeof translations];
 
   useEffect(() => {
-    setMounted(true);
     const savedData = localStorage.getItem("travelData");
     if (savedData) {
       setTravelData(JSON.parse(savedData));
@@ -414,30 +392,82 @@ export default function Home() {
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Box
-        sx={{
-          height: "100vh",
-          p: 2,
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-        }}
-      >
-        <Box sx={{ display: "flex", gap: 2 }}>
-          <Autocomplete
-            options={countries}
-            sx={{ width: 300 }}
-            renderInput={(params) => (
-              <TextField {...params} label="Search Country" />
-            )}
-            onChange={(_, value) => value && handleCountrySelect(value)}
+    <div
+      className={`min-h-screen ${
+        darkMode
+          ? "bg-gray-900 text-white"
+          : "bg-gradient-to-br from-indigo-50 to-blue-50"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto p-8">
+        {/* Controls under the title on the right */}
+        <div className="fixed top-4 right-4 z-50 flex items-center space-x-4">
+          <span className={darkMode ? "text-gray-200" : "text-gray-800"}>
+            🌐
+          </span>
+          <Switch
+            checked={language === "fr"}
+            onChange={() =>
+              setLanguage((prev) => (prev === "en" ? "fr" : "en"))
+            }
+            color={darkMode ? "default" : "primary"}
+            className={darkMode ? "text-gray-200" : "text-blue-600"}
           />
-          <FormControl sx={{ width: 200 }}>
-            <InputLabel>Map Style</InputLabel>
+          <span className={darkMode ? "text-gray-200" : "text-gray-800"}>
+            🌙
+          </span>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={darkMode}
+              onChange={() => setDarkMode(!darkMode)}
+            />
+            <div
+              className={`w-10 h-6 ${
+                darkMode ? "bg-gray-600" : "bg-gray-300"
+              } rounded-full shadow-inner`}
+            ></div>
+            <div
+              className={`absolute w-4 h-4 ${
+                darkMode ? "bg-gray-200" : "bg-white"
+              } rounded-full shadow transform transition-transform duration-200 ease-in-out ${
+                darkMode ? "translate-x-4" : "translate-x-0"
+              }`}
+            ></div>
+          </label>
+        </div>
+
+        <h1 className="text-4xl font-bold mb-6 text-center">{t.title}</h1>
+
+        {/* Travel Design Section */}
+        <section
+          className={`mb-12 p-6 ${
+            darkMode ? "bg-gray-800" : "bg-white"
+          } rounded-lg shadow-lg`}
+        >
+          <h2
+            className={`text-3xl font-semibold mb-4 ${
+              darkMode ? "text-white" : "text-gray-900"
+            }`}
+          >
+            {t.explore}
+          </h2>
+          <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+            {t.description1}
+          </p>
+          <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+            {t.description2}
+          </p>
+          <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+            {t.description3}
+          </p>
+        </section>
+
+        <div className="flex flex-wrap gap-6 items-center mb-8">
+          <FormControl className="min-w-[200px] bg-white rounded-xl shadow-lg">
             <Select
               value={mapStyle}
-              label="Map Style"
               onChange={(e) =>
                 setMapStyle(e.target.value as keyof typeof MAP_STYLES)
               }
@@ -447,151 +477,164 @@ export default function Home() {
               <MenuItem value="terrain">Terrain</MenuItem>
             </Select>
           </FormControl>
-        </Box>
+          <div className="flex-grow max-w-md">
+            <Autocomplete
+              options={countries}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Search Country"
+                  className="bg-white rounded-xl shadow-lg"
+                />
+              )}
+              onChange={(_, value) => handleCountrySelect(value)}
+              value={selectedCountry}
+              isOptionEqualToValue={(option, value) => option === value}
+            />
+          </div>
+        </div>
 
-        <Paper elevation={3} sx={{ flexGrow: 1 }}>
-          {mounted && (
-            <MapContainer
-              center={[20, 0]}
-              zoom={2}
-              style={{ height: "100%", width: "100%" }}
-              scrollWheelZoom={true}
-            >
-              <TileLayer url={MAP_STYLES[mapStyle]} />
-              {geoJsonData && (
-                <>
-                  <FocusOnCountry
-                    country={selectedCountry}
-                    geoJsonData={geoJsonData}
-                  />
-                  <GeoJSON
-                    data={geoJsonData}
-                    style={getCountryStyle as StyleFunction}
-                    onEachFeature={(
-                      feature: Feature<Geometry, GeoJsonProperties> | undefined,
-                      layer: ExtendedLayer
-                    ) => {
-                      if (!feature || !feature.properties) return; // Handle undefined feature or properties
+        <div className="h-[75vh] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-sm bg-white/30">
+          <MapContainer
+            center={[20, 0]}
+            zoom={2}
+            className="h-full w-full"
+            scrollWheelZoom={true}
+          >
+            <TileLayer url={MAP_STYLES[mapStyle]} />
+            {geoJsonData && (
+              <>
+                <FocusOnCountry
+                  country={selectedCountry}
+                  geoJsonData={geoJsonData}
+                />
+                <GeoJSON
+                  data={geoJsonData}
+                  style={getCountryStyle as StyleFunction}
+                  onEachFeature={(
+                    feature: Feature<Geometry, GeoJsonProperties> | undefined,
+                    layer: ExtendedLayer
+                  ) => {
+                    if (!feature || !feature.properties) return; // Handle undefined feature or properties
 
-                      const geoJsonFeature =
-                        feature.properties as GeoJSONFeature["properties"]; // Type assertion
-                      const bounds = (layer as FeatureGroup).getBounds();
-                      const center = bounds.getCenter();
-                      const area = bounds.getNorth() - bounds.getSouth();
+                    const geoJsonFeature =
+                      feature.properties as GeoJSONFeature["properties"]; // Type assertion
+                    const bounds = (layer as FeatureGroup).getBounds();
+                    const center = bounds.getCenter();
+                    const area = bounds.getNorth() - bounds.getSouth();
 
-                      const minZoomForLabels = 3;
-                      const shouldShowLabel = () => {
-                        if (zoomLevel < minZoomForLabels) return false;
+                    const minZoomForLabels = 3;
+                    const shouldShowLabel = () => {
+                      if (zoomLevel < minZoomForLabels) return false;
 
-                        const importance =
-                          (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
-                          (geoJsonFeature && travelData[geoJsonFeature.name]
-                            ? 2
-                            : 0) + // Use geoJsonFeature
-                          (geoJsonFeature?.name === selectedCountry ? 3 : 0) +
-                          (geoJsonFeature?.name === hoveredCountry ? 2 : 0);
+                      const importance =
+                        (area > 20 ? 4 : area > 10 ? 3 : area > 5 ? 2 : 1) +
+                        (geoJsonFeature && travelData[geoJsonFeature.name]
+                          ? 2
+                          : 0) + // Use geoJsonFeature
+                        (geoJsonFeature?.name === selectedCountry ? 3 : 0) +
+                        (geoJsonFeature?.name === hoveredCountry ? 2 : 0);
 
-                        return (
-                          zoomLevel >= 7 ||
-                          (zoomLevel >= 5 && importance >= 4) ||
-                          (zoomLevel >= 4 && importance >= 6) ||
-                          (zoomLevel >= 3 && importance >= 7) ||
-                          geoJsonFeature.name === selectedCountry ||
-                          geoJsonFeature.name === hoveredCountry
-                        );
-                      };
+                      return (
+                        zoomLevel >= 7 ||
+                        (zoomLevel >= 5 && importance >= 4) ||
+                        (zoomLevel >= 4 && importance >= 6) ||
+                        (zoomLevel >= 3 && importance >= 7) ||
+                        geoJsonFeature.name === selectedCountry ||
+                        geoJsonFeature.name === hoveredCountry
+                      );
+                    };
 
-                      if (shouldShowLabel()) {
-                        const baseFontSize = Math.min(
-                          Math.max(8, area * (zoomLevel / 3)),
-                          14
-                        );
+                    if (shouldShowLabel()) {
+                      const baseFontSize = Math.min(
+                        Math.max(8, area * (zoomLevel / 3)),
+                        14
+                      );
 
-                        const label = L.divIcon({
-                          className: "country-label",
-                          html: `
-                            <div style="
-                              font-size: ${baseFontSize}px;
-                              font-weight: ${
-                                geoJsonFeature.name === selectedCountry
-                                  ? "700"
-                                  : geoJsonFeature.name === hoveredCountry
-                                  ? "600"
-                                  : "500"
-                              };
-                              background-color: rgba(255, 255, 255, 0.95);
-                              padding: ${baseFontSize / 4}px ${
-                            baseFontSize / 2
-                          }px;
-                              border-radius: ${baseFontSize / 2}px;
-                              border: 1px solid rgba(0, 0, 0, 0.1);
-                              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                              white-space: nowrap;
-                              pointer-events: none;
-                              transform: translate(-50%, -50%);
-                              opacity: ${
-                                geoJsonFeature.name === selectedCountry
-                                  ? "1"
-                                  : geoJsonFeature.name === hoveredCountry
-                                  ? "0.95"
-                                  : "0.9"
-                              };
-                            ">${geoJsonFeature.name}</div>
-                          `,
-                          iconSize: [0, 0],
-                          iconAnchor: [0, 0],
-                        });
-
-                        layer.on("add", (e) => {
-                          if (e.target._map) {
-                            const labelMarker = L.marker(center, {
-                              icon: label,
-                              zIndexOffset: Math.floor(area * 100),
-                            }).addTo(e.target._map);
-                            layer.labelMarker = labelMarker;
-                          }
-                        });
-
-                        layer.on("remove", () => {
-                          if (layer.labelMarker) {
-                            layer.labelMarker.remove();
-                          }
-                        });
-                      }
-
-                      layer.on({
-                        click: () => handleCountryClick(geoJsonFeature.name),
-                        mouseover: () => setHoveredCountry(geoJsonFeature.name),
-                        mouseout: () => setHoveredCountry(null),
+                      const label = L.divIcon({
+                        className: "country-label",
+                        html: `
+                          <div style="
+                            font-size: ${baseFontSize}px;
+                            font-weight: ${
+                              geoJsonFeature.name === selectedCountry
+                                ? "700"
+                                : geoJsonFeature.name === hoveredCountry
+                                ? "600"
+                                : "500"
+                            };
+                            background-color: rgba(255, 255, 255, 0.95);
+                            padding: ${baseFontSize / 4}px ${
+                          baseFontSize / 2
+                        }px;
+                            border-radius: ${baseFontSize / 2}px;
+                            border: 1px solid rgba(0, 0, 0, 0.1);
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                            white-space: nowrap;
+                            pointer-events: none;
+                            transform: translate(-50%, -50%);
+                            opacity: ${
+                              geoJsonFeature.name === selectedCountry
+                                ? "1"
+                                : geoJsonFeature.name === hoveredCountry
+                                ? "0.95"
+                                : "0.9"
+                            };
+                          ">${geoJsonFeature.name}</div>
+                        `,
+                        iconSize: [0, 0],
+                        iconAnchor: [0, 0],
                       });
 
-                      if (geoJsonFeature.name === selectedCountry) {
-                        layer
-                          .bindPopup(
-                            `<div class="text-center p-2">
-                              <strong class="text-lg">${
-                                geoJsonFeature.name
-                              }</strong>
-                              ${
-                                geoJsonFeature?.name_local
-                                  ? `<br/><em class="text-gray-600">${geoJsonFeature.name_local}</em>`
-                                  : ""
-                              }
-                            </div>`
-                          )
-                          .openPopup();
-                      }
-                    }}
-                  />
-                  <MapContent
-                    setZoomLevel={setZoomLevel}
-                    setDialogOpen={setDialogOpen}
-                  />
-                </>
-              )}
-            </MapContainer>
-          )}
-        </Paper>
+                      layer.on("add", (e) => {
+                        if (e.target._map) {
+                          const labelMarker = L.marker(center, {
+                            icon: label,
+                            zIndexOffset: Math.floor(area * 100),
+                          }).addTo(e.target._map);
+                          layer.labelMarker = labelMarker;
+                        }
+                      });
+
+                      layer.on("remove", () => {
+                        if (layer.labelMarker) {
+                          layer.labelMarker.remove();
+                        }
+                      });
+                    }
+
+                    layer.on({
+                      click: () => handleCountryClick(geoJsonFeature.name),
+                      mouseover: () => setHoveredCountry(geoJsonFeature.name),
+                      mouseout: () => setHoveredCountry(null),
+                    });
+
+                    if (geoJsonFeature.name === selectedCountry) {
+                      layer
+                        .bindPopup(
+                          `<div class="text-center p-2">
+                            <strong class="text-lg">${
+                              geoJsonFeature.name
+                            }</strong>
+                            ${
+                              geoJsonFeature?.name_local
+                                ? `<br/><em class="text-gray-600">${geoJsonFeature.name_local}</em>`
+                                : ""
+                            }
+                          </div>`
+                        )
+                        .openPopup();
+                    }
+                  }}
+                />
+                <MapContent
+                  setZoomLevel={setZoomLevel}
+                  setDialogOpen={setDialogOpen}
+                />
+              </>
+            )}
+          </MapContainer>
+        </div>
 
         <Dialog
           open={dialogOpen}
@@ -863,7 +906,7 @@ export default function Home() {
           </p>
           <p>2025 Travel Memory Map.</p>
         </footer>
-      </Box>
-    </LocalizationProvider>
+      </div>
+    </div>
   );
 }
